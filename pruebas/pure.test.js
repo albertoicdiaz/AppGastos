@@ -1,0 +1,17 @@
+const fs=require('fs'),assert=require('assert');
+const html=fs.readFileSync(process.argv[2],'utf8');
+const code=html.split('/*PURE-START*/')[1].split('/*PURE-END*/')[0];
+const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES};')();
+let ok=0,fail=0;const t=(n,f)=>{try{f();ok++}catch(e){fail++;console.log('FALLA',n,e.message)}};
+const eq=assert.deepStrictEqual;
+t('montos',()=>{eq(F.parseAmount('12.500'),12500);eq(F.parseAmount('12.500,00'),12500);eq(F.parseAmount('12500.50'),12501);eq(F.parseAmount('$ 1.234.567'),1234567);eq(F.parseAmount('abc'),0);eq(F.parseAmount(''),0);});
+t('fechas',()=>{eq(F.normDate('2026-10-09','x'),'2026-10-09');eq(F.normDate('9/10/2026','x'),'2026-10-09');eq(F.normDate('2026-1-5','x'),'2026-01-05');eq(F.normDate('ayer','x'),'x');});
+t('telefonos',()=>{eq(F.normPhone('+56 9 1234 5678'),'56912345678');eq(F.normPhone('912345678'),'56912345678');eq(F.normPhone('12345678'),'56912345678');eq(F.normPhone(''),'');});
+t('categorias',()=>{eq(F.autoCat('STARBUCKS'),'Comida');eq(F.autoCat('Uber Eats'),'Comida');eq(F.autoCat('Uber Trip'),'Transporte');eq(F.autoCat('Jumbo Costanera'),'Supermercado');eq(F.autoCat('Netflix'),'Suscripciones');eq(F.autoCat('Cruz Verde'),'Salud');eq(F.autoCat('xyz'),'Otros');eq(F.autoCat(),'Otros');});
+t('cat validas',()=>F.RULES.forEach(([c])=>assert(c in F.CATS,c)));
+t('division igual bug 18.700',()=>{const r=F.calcSplit({mode:'equal',total:85000,tip:10},[1,2,3,4,5].map(id=>({id})));eq(r.parts,[18700,18700,18700,18700,18700]);eq(r.grand,93500);});
+t('division igual redondeo arriba',()=>{const r=F.calcSplit({mode:'equal',total:10000,tip:0},[{id:1},{id:2},{id:3}]);eq(r.parts,[3334,3334,3334]);});
+t('division sin personas',()=>{eq(F.calcSplit({mode:'equal',total:1000,tip:10},[]).parts,[]);});
+t('division consumo',()=>{const r=F.calcSplit({mode:'consumo',tip:10,amounts:{a:10000,b:5000}},[{id:'a'},{id:'b'}]);eq(r.parts,[11000,5500]);eq(r.grand,16500);});
+t('importar lineas',()=>{const r=F.parseLines('2026-10-09;12500;Starbucks\n12.500|Jumbo\n\n09/10/2026\t3.990,00\tUber Eats Santiago\nbasura\n0;nada','2026-10-01');eq(r,[{date:'2026-10-09',amount:12500,merchant:'Starbucks'},{date:'2026-10-01',amount:12500,merchant:'Jumbo'},{date:'2026-10-09',amount:3990,merchant:'Uber Eats Santiago'}]);});
+console.log(`${ok} pruebas OK, ${fail} fallas`);process.exit(fail?1:0);

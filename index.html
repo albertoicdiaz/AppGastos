@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mis Gastos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gastos">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f766e">
+<style>
+:root{
+  --bg:#f4f6f8; --card:#fff; --text:#16202a; --muted:#6b7785; --line:#e3e8ee;
+  --accent:#0f766e; --accent-ink:#fff; --danger:#c0392b; --ok:#15803d;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0e1317; --card:#171e24; --text:#e8edf2; --muted:#92a0ad; --line:#26313a; --accent:#2dd4bf; --accent-ink:#06201d; --danger:#ff7a6b; --ok:#4ade80;}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding:env(safe-area-inset-top) 0 calc(76px + env(safe-area-inset-bottom))}
+main{max-width:560px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 14px}
+h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font-size:16px;font-family:inherit}
+textarea{min-height:64px;resize:vertical}
+.row{display:flex;gap:10px}.row>*{flex:1}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 14px;background:var(--accent);color:var(--accent-ink);width:100%;margin-top:12px}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+button.small{width:auto;margin:0;padding:8px 12px;font-size:14px}
+.big{font-size:30px;font-weight:700}
+.muted{color:var(--muted);font-size:14px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item .l{min-width:0}.item .l b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.del{background:none;color:var(--danger);width:auto;margin:0;padding:6px 10px;font-size:20px}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:4px 0 10px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;margin-top:6px}
+.seg button{margin:0;background:transparent;color:var(--muted);padding:9px}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{margin:0;border-radius:0;background:transparent;color:var(--muted);padding:14px 4px;font-size:14px}
+nav button.on{color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chip{width:auto;margin:0;padding:8px 12px;font-size:14px;font-weight:500;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:999px}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.catsel{width:auto;padding:3px 8px;font-size:13px;margin-top:3px}
+.person{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center;padding:6px 0}
+.result{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.result:first-of-type{border-top:0}
+.btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.paid{color:var(--ok)}
+.monthnav{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.monthnav b{flex:1;text-align:center;text-transform:capitalize}
+details summary{font-weight:600;cursor:pointer;padding:2px 0}
+details ol{padding-left:20px;margin:10px 0}
+code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ================= MIS GASTOS ================= -->
+  <section id="tab-gastos">
+    <h1>Mis gastos</h1>
+
+    <div class="card">
+      <div class="monthnav">
+        <button class="ghost small" id="mPrev" aria-label="Mes anterior">‹</button>
+        <b id="mesTitulo">Este mes</b>
+        <button class="ghost small" id="mNext" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="big" id="totalMes">$0</div>
+      <div id="porCat" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Agregar gasto</h2>
+      <label>Monto</label>
+      <input id="gMonto" type="number" inputmode="numeric" placeholder="Ej: 12000">
+      <label>Categoría</label>
+      <div class="chips" id="catChips"></div>
+      <div class="row">
+        <div><label>Fecha</label><input id="gFecha" type="date"></div>
+        <div><label>Nota</label><input id="gNota" type="text" placeholder="Ej: Almuerzo"></div>
+      </div>
+      <button id="gAdd">Guardar gasto</button>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>🍎 Importar movimientos de Apple Wallet</summary>
+        <p class="muted">Una automatización de Atajos anota cada pago de Wallet en un archivo de texto, y aquí lo importas (sin duplicados, categorizado solo).</p>
+        <ol class="muted">
+          <li>Atajos → <b>Automatización</b> → <b>+</b> → <b>Transacción</b>. Elige tus tarjetas y “Ejecutar inmediatamente”.</li>
+          <li>Acción <b>Añadir al archivo</b> (texto) en iCloud Drive, archivo <code>gastos.txt</code>, con este texto: <code>[Fecha actual];[Importe];[Comerciante]</code> con la fecha en formato <code>yyyy-MM-dd</code>.</li>
+          <li>Vuelve aquí, toca <b>Elegir archivo</b> y selecciona <code>gastos.txt</code>.</li>
+        </ol>
+        <p class="muted">Formato por línea: <code>2026-10-09;12500;Starbucks</code> (también vale <code>12500;Starbucks</code>).</p>
+        <input type="file" id="impFile" accept=".txt,.csv,text/plain">
+        <label>…o pega las líneas aquí</label>
+        <textarea id="impText" placeholder="2026-10-09;12500;Starbucks"></textarea>
+        <button id="impBtn" class="ghost">Importar texto pegado</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Movimientos</h2>
+      <div id="lista"></div>
+    </div>
+  </section>
+
+  <!-- ================= DIVIDIR ================= -->
+  <section id="tab-dividir" class="hide">
+    <h1>Dividir cuenta</h1>
+
+    <div class="card">
+      <label>Concepto</label>
+      <input id="sConcepto" type="text" placeholder="Ej: Cena sushi">
+      <div class="seg" id="modo">
+        <button data-m="equal" class="on">Partes iguales</button>
+        <button data-m="consumo">Por consumo</button>
+      </div>
+      <div id="boxEqual">
+        <label>Total de la cuenta (sin propina)</label>
+        <input id="sTotal" type="number" inputmode="numeric" placeholder="Ej: 85000">
+      </div>
+      <label>Propina %</label>
+      <div class="row">
+        <input id="sTip" type="number" inputmode="numeric" value="10">
+        <select id="sTipPre"><option value="">Rápido…</option><option value="0">0%</option><option value="10">10%</option><option value="15">15%</option></select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Quiénes comen</h2>
+      <div class="muted">Toca un contacto para sumarlo o quitarlo.</div>
+      <div class="chips" id="chipsContactos"></div>
+      <label>Nueva persona (se guarda en Contactos)</label>
+      <div class="row">
+        <input id="pName" type="text" placeholder="Nombre">
+        <input id="pPhone" type="tel" inputmode="tel" placeholder="Teléfono">
+      </div>
+      <button class="ghost" id="pAdd">+ Agregar y guardar</button>
+      <div id="personas" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Resultado</h2>
+      <div class="muted" id="resumen"></div>
+      <div id="resultados"></div>
+    </div>
+
+    <div class="card">
+      <h2>Para el mensaje</h2>
+      <label>Tu nombre</label>
+      <input id="meName" type="text" placeholder="Yo">
+      <label>Datos para transferir</label>
+      <textarea id="banco" placeholder="Ej: Alberto Díaz · RUT 12.345.678-9 · Banco Estado Cuenta RUT N° 123456 · correo@mail.com"></textarea>
+      <button id="shareAll">Compartir resumen general</button>
+      <button class="ghost" id="saveMine">Guardar mi parte en Mis gastos</button>
+      <button class="ghost" id="resetSplit">Nueva cuenta</button>
+    </div>
+  </section>
+
+  <!-- ================= CONTACTOS ================= -->
+  <section id="tab-contactos" class="hide">
+    <h1>Contactos</h1>
+    <div class="card">
+      <h2>Agregar contacto</h2>
+      <label>Nombre</label>
+      <input id="cName" type="text" placeholder="Nombre">
+      <label>Teléfono (WhatsApp)</label>
+      <input id="cPhone" type="tel" inputmode="tel" placeholder="9 1234 5678">
+      <div class="muted" style="margin-top:6px">Si no pones código de país, se asume Chile (+56).</div>
+      <button id="cAdd">Guardar contacto</button>
+    </div>
+    <div class="card">
+      <h2>Guardados</h2>
+      <div id="listaContactos"></div>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button id="nav-gastos" class="on">💰 Gastos</button>
+  <button id="nav-dividir">🧾 Dividir</button>
+  <button id="nav-contactos">👥 Contactos</button>
+</nav>
+
+<script>
+(function(){
+/*PURE-START*/
+const CATS = {Comida:'🍽️', Supermercado:'🛒', Transporte:'🚗', Hogar:'🏠', Ocio:'🎬', Salud:'💊', Cuentas:'💡', Suscripciones:'📱', Compras:'🛍️', Otros:'📦'};
+const RULES = [
+  ['Suscripciones', /netflix|spotify|apple\.com|icloud|youtube|disney|hbo|max\b|prime video|google (one|play)|chatgpt|openai|anthropic|claude/i],
+  ['Supermercado', /jumbo|l[ií]der|unimarc|santa isabel|tottus|supermerc|acuenta|mayorista|ekono/i],
+  ['Transporte', /uber(?! eats)|cabify|didi|copec|shell|petrobras|enex|metro|\bbip\b|estacionam|autopista|\btag\b|tur ?bus|pullman|latam|sky airline|jetsmart/i],
+  ['Comida', /restaur|caf[eé]|starbucks|mcdonald|burger|pizza|sushi|pedidosya|uber eats|rappi|juan maestro|domino|kfc|subway|helader|panader|bar\b|fuente/i],
+  ['Hogar', /sodimac|\beasy\b|ikea|homecenter|construmart|ferreter/i],
+  ['Salud', /farmacia|cruz verde|salcobrand|ahumada|cl[ií]nica|dental|m[eé]dic|laborator|optica|[óo]ptica/i],
+  ['Cuentas', /enel|aguas|vtr|movistar|entel|\bwom\b|claro|metrogas|lipigas|abastible|\bcge\b|banco|seguro|contribuc/i],
+  ['Ocio', /cine|cinemark|cinehoyts|steam|playstation|xbox|nintendo|ticketmaster|puntoticket|teatro|gimnasio|smartfit|pacific/i],
+  ['Compras', /falabella|paris|ripley|zara|h&m|amazon|mercado ?libre|aliexpress|shein|hites|la polar|nike|adidas/i]
+];
+function autoCat(merchant){ for(const [c,re] of RULES){ if(re.test(merchant||'')) return c; } return 'Otros'; }
+function parseAmount(s){
+  s = String(s||'').replace(/[^\d.,]/g,'');
+  if(/^\d+\.\d{1,2}$/.test(s)) return Math.round(parseFloat(s));   // 12500.50 (punto decimal)
+  s = s.replace(/\./g,'').split(',')[0];                           // 12.500,00 (formato chileno)
+  const n = parseInt(s,10);
+  return isNaN(n) ? 0 : n;
+}
+function normDate(s, fallback){
+  s = String(s||'').trim(); let m;
+  if((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  if((m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return fallback;
+}
+function normPhone(s){
+  const d = String(s||'').replace(/\D/g,'');
+  if(!d) return '';
+  if(d.startsWith('56') && d.length>=11) return d;
+  if(d.length===9) return '56'+d;
+  if(d.length===8) return '569'+d;
+  return d;
+}
+function calcSplit(s, people){
+  const tip = Math.max(0, parseFloat(s.tip)||0), n = people.length;
+  if(s.mode==='equal'){
+    const base = parseFloat(s.total)||0;
+    const grand = Math.round(base*(100+tip))/100;                       // evita errores de coma flotante
+    const each = base>0 && n>0 ? Math.ceil(grand/n - 1e-9) : 0;       // redondea hacia arriba
+    return { tip, n, base, grand, parts: people.map(()=>each), bases: people.map(()=>n?base/n:0) };
+  }
+  const bases = people.map(p => parseFloat((s.amounts||{})[p.id])||0);
+  const base = bases.reduce((a,b)=>a+b,0);
+  return { tip, n, base, grand: Math.round(base*(100+tip))/100, parts: bases.map(b=>Math.round(b*(100+tip)/100)), bases };
+}
+function parseLines(txt, todayStr){
+  const out = [];
+  String(txt||'').split(/\r?\n/).forEach(line => {
+    line = line.trim(); if(!line) return;
+    const p = line.split(/[;|\t]/).map(x=>x.trim());
+    let date = todayStr, amount = 0, merchant = '';
+    if(p.length>=3){ date = normDate(p[0], todayStr); amount = parseAmount(p[1]); merchant = p.slice(2).join(' '); }
+    else if(p.length===2){ amount = parseAmount(p[0]); merchant = p[1]; }
+    else return;
+    if(amount>0) out.push({ date, amount, merchant });
+  });
+  return out;
+}
+/*PURE-END*/
+
+  const $ = s => document.querySelector(s);
+  const CLP = new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0});
+  const money = n => CLP.format(Math.round(n||0));
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const load = (k,d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch(e){ return d; } };
+  const save = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+  const today = () => { const d = new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+  const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+  let expenses = load('expenses', []);
+  let contacts = load('contacts', []);
+  let split = Object.assign({ concept:'', mode:'equal', total:'', tip:10, sel:[], amounts:{}, paid:{}, meName:'Yo' }, load('split', {}));
+  if(!Array.isArray(split.sel)) split.sel = [];
+  let banco = load('banco', '');
+  let selCat = 'Comida';
+  let viewYm = today().slice(0,7);
+
+  const persistE = () => save('expenses', expenses);
+  const persistC = () => save('contacts', contacts);
+  const persistS = () => save('split', split);
+
+  /* ---------- Pestañas ---------- */
+  function tab(t){
+    ['gastos','dividir','contactos'].forEach(x => {
+      $('#tab-'+x).classList.toggle('hide', x!==t);
+      $('#nav-'+x).classList.toggle('on', x===t);
+    });
+    if(t==='dividir') renderDividir();
+    if(t==='contactos') renderContactos();
+    window.scrollTo(0,0);
+  }
+  ['gastos','dividir','contactos'].forEach(x => $('#nav-'+x).onclick = () => tab(x));
+
+  /* ================= MIS GASTOS ================= */
+  function renderChips(){
+    $('#catChips').innerHTML = Object.keys(CATS).map(c =>
+      `<button type="button" class="chip ${c===selCat?'on':''}" data-c="${c}">${CATS[c]} ${c}</button>`).join('');
+  }
+  $('#catChips').onclick = ev => { const b = ev.target.closest('.chip'); if(!b) return; selCat = b.dataset.c; renderChips(); };
+
+  function ymLabel(ym){ const [y,m] = ym.split('-').map(Number); return new Date(y, m-1, 1).toLocaleDateString('es-CL',{month:'long',year:'numeric'}); }
+  function shiftYm(d){ let [y,m] = viewYm.split('-').map(Number); m += d; if(m<1){m=12;y--} if(m>12){m=1;y++} viewYm = `${y}-${String(m).padStart(2,'0')}`; renderGastos(); }
+  $('#mPrev').onclick = () => shiftYm(-1);
+  $('#mNext').onclick = () => shiftYm(1);
+
+  function renderGastos(){
+    $('#mesTitulo').textContent = ymLabel(viewYm);
+    const mes = expenses.filter(e => e.date.startsWith(viewYm));
+    const total = mes.reduce((a,e)=>a+e.amount,0);
+    $('#totalMes').textContent = money(total);
+    const cats = {};
+    mes.forEach(e => cats[e.cat] = (cats[e.cat]||0)+e.amount);
+    $('#porCat').innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v]) =>
+      `<div class="row" style="justify-content:space-between"><span>${CATS[c]||'📦'} ${esc(c)}</span><span class="muted" style="text-align:right">${money(v)} · ${total?Math.round(v/total*100):0}%</span></div>
+       <div class="bar"><i style="width:${total?Math.round(v/total*100):0}%"></i></div>`).join('')
+       || '<div class="muted">Sin gastos este mes.</div>';
+
+    const sorted = [...mes].sort((a,b)=> b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
+    $('#lista').innerHTML = sorted.map(e =>
+      `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>
+         <span class="muted">${e.date.split('-').reverse().join('/')}</span>
+         <select class="catsel" data-id="${e.id}">${Object.keys(CATS).map(c=>`<option value="${c}" ${c===e.cat?'selected':''}>${CATS[c]} ${c}</option>`).join('')}</select></div>
+       <div style="display:flex;align-items:center;gap:4px"><b>${money(e.amount)}</b><button class="del" data-id="${e.id}" aria-label="Eliminar">×</button></div></div>`
+    ).join('') || '<div class="muted">Sin movimientos.</div>';
+  }
+
+  function addExpense(o){
+    expenses.push(Object.assign({ id: uid() }, o));
+    persistE();
+  }
+
+  $('#gAdd').onclick = () => {
+    const amount = parseAmount($('#gMonto').value);
+    if(!(amount>0)){ $('#gMonto').focus(); return; }
+    const date = $('#gFecha').value || today();
+    addExpense({ amount, cat:selCat, note:$('#gNota').value.trim(), date });
+    $('#gMonto').value=''; $('#gNota').value='';
+    viewYm = date.slice(0,7);
+    renderGastos();
+  };
+  $('#lista').onclick = ev => {
+    const b = ev.target.closest('.del'); if(!b) return;
+    if(confirm('¿Eliminar este gasto?')){ expenses = expenses.filter(e => String(e.id)!==b.dataset.id); persistE(); renderGastos(); }
+  };
+  $('#lista').onchange = ev => {
+    const s = ev.target.closest('.catsel'); if(!s) return;
+    const e = expenses.find(x => String(x.id)===s.dataset.id); if(e){ e.cat = s.value; persistE(); renderGastos(); }
+  };
+
+  /* ---------- Importar Wallet ---------- */
+  function importText(txt){
+    const rows = parseLines(txt, today());
+    if(!rows.length){ alert('No encontré movimientos válidos. Formato: 2026-10-09;12500;Comercio'); return; }
+    const keys = new Set(expenses.map(e => e.key).filter(Boolean));
+    let added = 0, dup = 0, last = null;
+    rows.forEach(r => {
+      const key = `${r.date}|${r.amount}|${r.merchant.toLowerCase()}`;
+      if(keys.has(key)){ dup++; return; }
+      keys.add(key);
+      addExpense({ amount:r.amount, cat:autoCat(r.merchant), note:r.merchant, date:r.date, key, src:'wallet' });
+      added++; last = r.date;
+    });
+    if(last) viewYm = last.slice(0,7);
+    renderGastos();
+    alert(`Importados: ${added}` + (dup?` · Repetidos omitidos: ${dup}`:''));
+  }
+  $('#impFile').onchange = async ev => {
+    const f = ev.target.files[0]; if(!f) return;
+    try { importText(await f.text()); } catch(e){ alert('No pude leer el archivo.'); }
+    ev.target.value = '';
+  };
+  $('#impBtn').onclick = () => { importText($('#impText').value); $('#impText').value=''; };
+
+  /* ================= CONTACTOS ================= */
+  function addContact(name, phone){
+    name = (name||'').trim(); if(!name) return null;
+    const c = { id:'c'+uid(), name, phone:normPhone(phone) };
+    contacts.push(c); persistC(); return c;
+  }
+  const showPhone = p => p ? '+'+p : 'sin teléfono';
+
+  function renderContactos(){
+    const list = [...contacts].sort((a,b)=>a.name.localeCompare(b.name,'es'));
+    $('#listaContactos').innerHTML = list.map(c =>
+      `<div class="item"><div class="l"><b>${esc(c.name)}</b><span class="muted">${esc(showPhone(c.phone))}</span></div>
+       <div><button class="del" style="color:var(--accent)" data-edit="${c.id}" aria-label="Editar">✎</button><button class="del" data-del="${c.id}" aria-label="Eliminar">×</button></div></div>`
+    ).join('') || '<div class="muted">Aún no tienes contactos guardados.</div>';
+  }
+  $('#cAdd').onclick = () => {
+    if(!$('#cName').value.trim()){ $('#cName').focus(); return; }
+    addContact($('#cName').value, $('#cPhone').value);
+    $('#cName').value=''; $('#cPhone').value='';
+    renderContactos();
+  };
+  $('#listaContactos').onclick = ev => {
+    const d = ev.target.closest('[data-del]'), e = ev.target.closest('[data-edit]');
+    if(d){
+      const c = contacts.find(x=>x.id===d.dataset.del);
+      if(c && confirm(`¿Eliminar a ${c.name}?`)){
+        contacts = contacts.filter(x=>x.id!==c.id); split.sel = split.sel.filter(id=>id!==c.id);
+        persistC(); persistS(); renderContactos();
+      }
+    }
+    if(e){
+      const c = contacts.find(x=>x.id===e.dataset.edit); if(!c) return;
+      const n = prompt('Nombre', c.name); if(n===null) return;
+      const p = prompt('Teléfono', c.phone ? '+'+c.phone : ''); if(p===null) return;
+      c.name = n.trim() || c.name; c.phone = normPhone(p); persistC(); renderContactos();
+    }
+  };
+
+  /* ================= DIVIDIR ================= */
+  const people = () => [{ id:'me', name:split.meName||'Yo', phone:'' }]
+    .concat(split.sel.map(id => contacts.find(c=>c.id===id)).filter(Boolean));
+
+  function msgFor(p, i, r){
+    const first = p.name.split(' ')[0];
+    const label = split.concept.trim() || 'La cuenta';
+    let t = `Hola ${first} 👋\n${label}: ${money(r.base)}` + (r.tip?` + ${r.tip}% de propina`:'') + ` = ${money(r.grand)}\n\n`;
+    t += `Tu parte: *${money(r.parts[i])}*`;
+    if(split.mode==='consumo') t += ` (consumo ${money(r.bases[i])} + propina ${money(r.parts[i]-r.bases[i])})`;
+    t += `\n\nDetalle:\n` + people().map((q,j)=>`• ${q.name}: ${money(r.parts[j])}`).join('\n');
+    if(banco.trim()) t += `\n\nDatos para transferir:\n${banco.trim()}`;
+    return t;
+  }
+
+  function renderChipsContactos(){
+    $('#chipsContactos').innerHTML = contacts.length
+      ? [...contacts].sort((a,b)=>a.name.localeCompare(b.name,'es')).map(c =>
+          `<button type="button" class="chip ${split.sel.includes(c.id)?'on':''}" data-cid="${c.id}">${esc(c.name)}</button>`).join('')
+      : '<span class="muted">Aún no tienes contactos. Agrega uno abajo.</span>';
+  }
+
+  function renderPersonas(){
+    const ps = people();
+    $('#personas').innerHTML = ps.map(p =>
+      `<div class="person"><div><b>${esc(p.name)}</b>${p.id==='me'?' <span class="muted">(tú)</span>':`<div class="muted">${esc(showPhone(p.phone))}</div>`}</div>
+       ${split.mode==='consumo' ? `<input data-a="${p.id}" type="number" inputmode="numeric" placeholder="Consumo" value="${esc((split.amounts||{})[p.id]||'')}">` : '<span></span>'}</div>`
+    ).join('');
+  }
+
+  function renderResultado(){
+    const ps = people(), r = calcSplit(split, ps);
+    $('#boxEqual').classList.toggle('hide', split.mode!=='equal');
+    if(ps.length<2){ $('#resumen').textContent='Agrega al menos una persona.'; $('#resultados').innerHTML=''; return; }
+    if(!(r.base>0)){ $('#resumen').textContent = split.mode==='equal' ? 'Ingresa el total para ver la división.' : 'Ingresa el consumo de cada persona.'; $('#resultados').innerHTML=''; return; }
+    const suma = r.parts.reduce((a,b)=>a+b,0);
+    $('#resumen').innerHTML = `Cuenta ${money(r.base)}${r.tip?` + propina ${money(r.base*r.tip/100)}`:''} = <b>${money(r.grand)}</b>`
+      + (suma>Math.round(r.grand) ? `<br>Redondeado hacia arriba: se recauda ${money(suma)}.`:'');
+    $('#resultados').innerHTML = ps.map((p,i) => {
+      const paid = !!split.paid[p.id];
+      return `<div class="result"><div><b>${esc(p.name)}</b>${p.id==='me'?' <span class="muted">(tú)</span>':''}
+        <div class="${paid?'paid':'muted'}">${money(r.parts[i])}${paid?' · pagó ✓':''}</div></div>
+        ${p.id==='me' ? '' : `<div class="btns">
+          <button class="small" data-wa="${i}">WhatsApp</button>
+          <button class="small ghost" data-sms="${i}">Mensaje</button>
+          <button class="small ghost" data-paid="${p.id}">${paid?'↺':'✓'}</button></div>`}</div>`;
+    }).join('');
+  }
+
+  function renderDividir(){
+    $('#sConcepto').value = split.concept; $('#sTotal').value = split.total; $('#sTip').value = split.tip;
+    $('#meName').value = split.meName; $('#banco').value = banco;
+    document.querySelectorAll('#modo button').forEach(b => b.classList.toggle('on', b.dataset.m===split.mode));
+    renderChipsContactos(); renderPersonas(); renderResultado();
+  }
+
+  $('#modo').onclick = ev => { const b = ev.target.closest('button'); if(!b) return; split.mode=b.dataset.m; persistS(); renderDividir(); };
+  $('#sConcepto').oninput = e => { split.concept = e.target.value; persistS(); };
+  $('#sTotal').oninput = e => { split.total = e.target.value; persistS(); renderResultado(); };
+  $('#sTip').oninput = e => { split.tip = e.target.value; persistS(); renderResultado(); };
+  $('#sTipPre').onchange = e => { if(e.target.value!==''){ split.tip = e.target.value; $('#sTip').value = split.tip; persistS(); renderResultado(); } e.target.value=''; };
+  $('#meName').oninput = e => { split.meName = e.target.value; persistS(); renderPersonas(); renderResultado(); };
+  $('#banco').oninput = e => { banco = e.target.value; save('banco', banco); };
+
+  $('#chipsContactos').onclick = ev => {
+    const b = ev.target.closest('[data-cid]'); if(!b) return;
+    const id = b.dataset.cid;
+    split.sel = split.sel.includes(id) ? split.sel.filter(x=>x!==id) : split.sel.concat(id);
+    persistS(); renderDividir();
+  };
+  $('#pAdd').onclick = () => {
+    if(!$('#pName').value.trim()){ $('#pName').focus(); return; }
+    const c = addContact($('#pName').value, $('#pPhone').value);
+    if(c){ split.sel.push(c.id); persistS(); }
+    $('#pName').value=''; $('#pPhone').value='';
+    renderDividir();
+  };
+  $('#personas').oninput = e => {
+    if(e.target.dataset.a!==undefined){ split.amounts[e.target.dataset.a] = e.target.value; persistS(); renderResultado(); }
+  };
+
+  $('#resultados').onclick = ev => {
+    const wa = ev.target.closest('[data-wa]'), sms = ev.target.closest('[data-sms]'), pd = ev.target.closest('[data-paid]');
+    const ps = people(), r = calcSplit(split, ps);
+    if(pd){ split.paid[pd.dataset.paid] = !split.paid[pd.dataset.paid]; persistS(); renderResultado(); return; }
+    const i = +(wa ? wa.dataset.wa : sms ? sms.dataset.sms : -1); if(i<0) return;
+    const p = ps[i], text = msgFor(p, i, r);
+    if(wa) window.open(`https://wa.me/${p.phone}?text=${encodeURIComponent(text)}`, '_blank');
+    else location.href = `sms:${p.phone ? '+'+p.phone : ''}&body=${encodeURIComponent(text)}`;
+  };
+
+  $('#shareAll').onclick = async () => {
+    const ps = people(), r = calcSplit(split, ps); if(!(r.base>0)) return;
+    let t = `🧾 ${split.concept.trim()||'Cuenta'}: ${money(r.base)}` + (r.tip?` + ${r.tip}% propina`:'') + ` = ${money(r.grand)}\n\n`;
+    t += ps.map((p,i)=>`• ${p.name}: ${money(r.parts[i])}`).join('\n');
+    if(banco.trim()) t += `\n\nTransferir a:\n${banco.trim()}`;
+    try {
+      if(navigator.share) await navigator.share({ text:t });
+      else { await navigator.clipboard.writeText(t); alert('Resumen copiado'); }
+    } catch(e){}
+  };
+
+  $('#saveMine').onclick = () => {
+    const r = calcSplit(split, people()); if(!(r.parts[0]>0)) return;
+    addExpense({ amount:r.parts[0], cat:'Comida', note:split.concept.trim() || 'Cuenta dividida (mi parte)', date:today() });
+    viewYm = today().slice(0,7); renderGastos(); alert('Guardado en Mis gastos');
+  };
+
+  $('#resetSplit').onclick = () => {
+    if(!confirm('¿Empezar una cuenta nueva? Se mantienen las personas seleccionadas.')) return;
+    split.concept=''; split.total=''; split.amounts={}; split.paid={}; persistS(); renderDividir();
+  };
+
+  /* ---------- Inicio ---------- */
+  $('#gFecha').value = today();
+  renderChips(); renderGastos();
+
+  if('serviceWorker' in navigator){ window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+})();
+</script>
+</body>
+</html>
