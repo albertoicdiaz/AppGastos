@@ -4,7 +4,7 @@ const fs=require('fs'),path=require('path'),assert=require('assert');
 const file=process.argv[2]||path.join(__dirname,'..','index.html');
 const html=fs.readFileSync(file,'utf8');
 const code=html.split('/*PURE-START*/')[1].split('/*PURE-END*/')[0];
-const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES,findDupes,sueldoFor,monthStats,calcBoleta,parseReceipt};')();
+const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES,findDupes,sueldoFor,monthStats,calcBoleta,parseReceipt,buildReceiptRequest,receiptFromApi};')();
 let ok=0,fail=0;const t=(n,f)=>{try{f();ok++}catch(e){fail++;console.log('FALLA',n,e.message)}};
 const eq=assert.deepStrictEqual;
 t('montos',()=>{eq(F.parseAmount('12.500'),12500);eq(F.parseAmount('12.500,00'),12500);eq(F.parseAmount('12500.50'),12501);eq(F.parseAmount('$ 1.234.567'),1234567);eq(F.parseAmount('abc'),0);eq(F.parseAmount(''),0);});
@@ -65,4 +65,21 @@ TARJETA DEBITO 37.290`;
   eq([r.subtotal,r.propina,r.total,r.totalTip],[33900,3390,33900,37290]);
 });
 t('leer boleta vacia',()=>{eq(F.parseReceipt('').items,[]);});
+// Lectura automática
+t('pedido a Claude',()=>{
+  const b=F.buildReceiptRequest('AAAA','image/jpeg');
+  eq(b.model,'claude-opus-5-5');eq(b.fallbacks,'default');eq(b.output_config.format.type,'json_schema');
+  eq(b.messages[0].content[0],{type:'image',source:{type:'base64',media_type:'image/jpeg',data:'AAAA'}});
+  assert(!('thinking' in b));
+});
+t('respuesta de Claude',()=>{
+  const d={items:[{nombre:'Pisco sour',cantidad:2,precio_unitario:4500,total_linea:9000},{nombre:'Lomo',cantidad:1,precio_unitario:0,total_linea:12900},{nombre:'',cantidad:1,precio_unitario:1,total_linea:1}],subtotal:21900,propina:2190,total:21900,total_con_propina:24090};
+  const r=F.receiptFromApi({stop_reason:'end_turn',content:[{type:'thinking',thinking:''},{type:'text',text:JSON.stringify(d)}]});
+  eq(r.items,[{name:'Pisco sour',qty:2,unit:4500},{name:'Lomo',qty:1,unit:12900}]);eq([r.total,r.totalTip,r.propina],[21900,24090,2190]);
+});
+t('respuesta con error',()=>{
+  assert.throws(()=>F.receiptFromApi({stop_reason:'refusal',content:[]}),/no pudo/);
+  assert.throws(()=>F.receiptFromApi({type:'error',error:{message:'overloaded'}}),/overloaded/);
+  assert.throws(()=>F.receiptFromApi({stop_reason:'max_tokens',content:[]}),/cortada/);
+});
 console.log(`${ok} pruebas OK, ${fail} fallas`);process.exit(fail?1:0);

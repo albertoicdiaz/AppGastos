@@ -34,7 +34,9 @@ Subir los archivos juntos a un hosting con HTTPS (GitHub Pages, Netlify o Vercel
 - Datos de la cuenta: concepto, total sin propina, propina % (por defecto 10, con atajos 0/10/15).
 - Modos: partes iguales (redondea hacia arriba), por consumo (cada persona con su monto; la propina se aplica proporcional) o por boleta.
 - Por boleta: lista de productos (nombre, cantidad, precio unitario). Cada producto se asigna tocando los nombres de quienes lo consumieron; si son varios se divide en partes iguales. A cada persona se le suma la propina % sobre su consumo. Se ingresa el total impreso en la boleta y la app dice si calza con la suma de productos (sin propina) o con la suma + propina (±$1); si no calza muestra la diferencia. Avisa si hay productos sin asignar.
-- Leer la boleta: se saca la foto, se copia el texto con Texto en vivo del iPhone y se pega; `parseReceipt` arma la lista y toma el TOTAL. Pendiente de decisión: agregar lectura automática de la foto con la API de Claude usando una clave del usuario.
+- Leer la boleta (Alberto eligió "Ambos"):
+  - Texto en vivo: se saca la foto, se copia el texto con Texto en vivo del iPhone y se pega; `parseReceipt` arma la lista y toma el TOTAL. Gratis.
+  - Automático: si se guarda una clave de API de Anthropic (sección "Lectura automática con Claude"), aparece el botón "Foto de la boleta". La foto se reduce a 1568 px en JPEG y se envía directo desde el teléfono a `api.anthropic.com/v1/messages` (encabezado `anthropic-dangerous-direct-browser-access`), modelo `claude-opus-5-5` con esfuerzo `low`, salida JSON con esquema (`buildReceiptRequest`) y `fallbacks: "default"`. `receiptFromApi` valida la respuesta. La clave queda en localStorage (`apiKey`) solo en ese teléfono y cada foto se cobra en su cuenta de Anthropic.
 - El mensaje por persona en modo boleta incluye el detalle de sus productos.
 - Personas: se eligen tocando chips de los contactos guardados, o se agrega una persona nueva (nombre y teléfono) que además se guarda en Contactos. La primera persona siempre soy yo (nombre editable).
 - Resultado por persona, con botones: WhatsApp (abre `wa.me/<número>?text=...`), Mensaje (`sms:+número&body=...`) y marcar "pagó".
@@ -61,10 +63,11 @@ Una página web no puede leer Wallet ni el correo por sí sola. Solución sin se
 - `sueldos`: `{ 'YYYY-MM': monto líquido }`
 - `split`: `{concept, mode 'equal'|'consumo'|'boleta', total, tip, sel [ids de contactos], amounts {id: monto}, paid {id: bool}, meName, items [{id, name, qty, unit, who [ids, 'me' soy yo]}], boletaTotal}`
 - `banco`: texto con los datos de transferencia.
+- `apiKey`: clave de API de Anthropic (opcional) para leer boletas automáticamente.
 Limitación importante: en iOS, Safari y la app instalada en la pantalla de inicio tienen almacenamiento separado, y si se desinstala la app se pierden los datos. No hay respaldo ni sincronización.
 
 ## Código: funciones puras (bloque `PURE-START`/`PURE-END` en el script)
-`autoCat`, `parseAmount`, `normDate`, `normPhone`, `calcSplit`, `parseLines`, `findDupes`, `sueldoFor`, `monthStats`, `calcBoleta`, `parseReceipt`. Están probadas con pruebas automáticas en Node (montos chilenos, teléfonos, fechas, categorías, división igual y por consumo, importación de líneas).
+`autoCat`, `parseAmount`, `normDate`, `normPhone`, `calcSplit`, `parseLines`, `findDupes`, `sueldoFor`, `monthStats`, `calcBoleta`, `parseReceipt`, `buildReceiptRequest`, `receiptFromApi`. Están probadas con pruebas automáticas en Node (montos chilenos, teléfonos, fechas, categorías, división igual y por consumo, importación de líneas).
 Bug corregido: con 85.000 + 10% entre 5 personas daba $18.701 por error de coma flotante; ahora da $18.700 (se calcula el total en enteros antes de dividir y se redondea hacia arriba).
 
 ## Decisiones y límites conocidos
@@ -80,7 +83,6 @@ Bug corregido: con 85.000 + 10% entre 5 personas daba $18.701 por error de coma 
 - Exportar e importar respaldo en JSON (para no perder datos y para pasar de Safari a la app instalada).
 - Presupuesto mensual por categoría con alertas.
 - Importar avisos de correo del banco (falta ejemplo).
-- Lectura automática de la foto de la boleta (API de Claude o similar).
 - Sincronización con un backend (por ejemplo Google Sheets mediante Apps Script) para tener los gastos de Wallet en tiempo real.
 - Leer avisos del banco desde Gmail.
 - Gráficos mensuales y comparación entre meses.
