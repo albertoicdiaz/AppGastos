@@ -108,7 +108,7 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
     <div class="card hide" id="revCard">
       <div class="row" style="align-items:center;justify-content:space-between"><h2 style="margin:0">Por revisar</h2>
         <button class="small ghost" id="revAll" style="flex:0 0 auto">Confirmar todos</button></div>
-      <div class="muted" style="margin-top:6px">Movimientos importados. Revisa la categoría y confirma, o elimina los repetidos.</div>
+      <div class="muted" style="margin-top:6px">Movimientos importados. Cuéntame a qué se debió cada uno, revisa la categoría y confirma, o elimina los repetidos.</div>
       <div id="revList" style="margin-top:6px"></div>
     </div>
 
@@ -137,8 +137,29 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
         <p class="muted">Formato por línea: <code>2026-10-09;12500;Starbucks</code> (también vale <code>12500;Starbucks</code>).</p>
         <input type="file" id="impFile" accept=".txt,.csv,text/plain">
         <label>…o pega las líneas aquí</label>
-        <textarea id="impText" placeholder="2026-10-09;12500;Starbucks"></textarea>
+        <textarea id="impText" placeholder="2026-10-09;12500;Starbucks  (o el texto de un correo de compra del banco)"></textarea>
         <button id="impBtn" class="ghost">Importar texto pegado</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <details id="correoBox">
+        <summary>📧 Compras con tarjeta (correos de Banco de Chile)</summary>
+        <p class="muted">Cada aviso “Te informamos que se ha realizado una compra…” del banco entra a <b>Por revisar</b>, donde te pregunto a qué se debió. No hace falta reenviar correos: un pequeño script de Google lee esos avisos en tu propio Gmail y la app los trae al abrirla.</p>
+        <ol class="muted">
+          <li>En el computador abre <b>script.google.com</b> → <b>Nuevo proyecto</b> y pega el código de <code>integraciones/correo-bancochile.gs</code> (está en el repositorio). Cambia <code>CAMBIA-ESTA-CLAVE</code> por una clave tuya.</li>
+          <li>Ejecuta la función <b>probar</b> una vez y acepta los permisos de Gmail.</li>
+          <li><b>Implementar</b> → <b>Nueva implementación</b> → tipo <b>Aplicación web</b>, ejecutar como <b>Yo</b>, acceso <b>Cualquier usuario</b>. Copia la URL.</li>
+          <li>Pega aquí la URL agregándole <code>?token=</code> y tu clave.</li>
+        </ol>
+        <label>URL del script (con ?token=…)</label>
+        <input id="correoUrl" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec?token=…">
+        <div class="row" style="margin-top:8px">
+          <button class="small" id="correoSave">Guardar</button>
+          <button class="small ghost" id="correoSync">Traer compras ahora</button>
+        </div>
+        <div class="muted" id="correoInfo" style="margin-top:6px"></div>
+        <p class="muted">Sin script también funciona: copia el texto del correo y pégalo en el cuadro de importar de arriba.</p>
       </details>
     </div>
 
@@ -436,6 +457,23 @@ function receiptFromApi(resp){
   }).filter(it => it.name && it.unit>0);
   return { items, subtotal:int(d.subtotal), propina:int(d.propina), total:int(d.total), totalTip:int(d.total_con_propina) };
 }
+/* ---- Avisos de compra de Banco de Chile (correo) ---- */
+// "Te informamos que se ha realizado una compra por $1.000 con Tarjeta de Crédito ****1284 en EXPRESS VALDIVIA CTO el 11/10/2026 19:08."
+const BANK_RE = /compra por \$\s?([\d.,]+) con Tarjeta de (Cr[eé]dito|D[eé]bito) \*+(\d{4}) en (.+?) el (\d{1,2}\/\d{1,2}\/\d{4})(?: (\d{1,2}:\d{2}))?/gi;
+function parseBankMail(txt){
+  const flat = String(txt||'').replace(/^[ \t]*(>[ \t]?)+/gm,'')            // citas ">" de correos reenviados
+    .replace(/<[^>]+>/g,' ').replace(/&nbsp;|\xa0/g,' ').replace(/&([aeiou])acute;/gi,'$1').replace(/&#42;/g,'*').replace(/\s+/g,' ');
+  const out = [];
+  for(const m of flat.matchAll(BANK_RE)){
+    const amount = parseAmount(m[1]), date = normDate(m[5], '');
+    if(!(amount>0) || !date) continue;
+    const r = { date, time: m[6] ? m[6].padStart(5,'0') : '', amount, card: m[3], tipo: /^d/i.test(m[2]) ? 'debito' : 'credito', merchant: m[4].trim() };
+    r.key = bankKey(r);
+    if(!out.some(o => o.key===r.key)) out.push(r);     // el mismo aviso citado dos veces (reenvíos)
+  }
+  return out;
+}
+function bankKey(r){ return `bch|${r.date} ${r.time||''}|${r.amount}|${r.card||''}`; }
 /*PURE-END*/
 
   const $ = s => document.querySelector(s);
@@ -502,7 +540,7 @@ function receiptFromApi(resp){
 
     const sorted = [...mes].sort((a,b)=> b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
     $('#lista').innerHTML = sorted.map(e =>
-      `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>
+      `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>${e.why?`<span>${esc(e.why)}</span>`:''}
          <span class="muted">${e.date.split('-').reverse().join('/')}${e.rev===false?' <span class="tag">por revisar</span>':''}</span>
          <select class="catsel" data-id="${e.id}">${Object.keys(CATS).map(c=>`<option value="${c}" ${c===e.cat?'selected':''}>${CATS[c]} ${c}</option>`).join('')}</select></div>
        <div style="display:flex;align-items:center;gap:4px"><b>${money(e.amount)}</b><button class="del" data-id="${e.id}" aria-label="Eliminar">×</button></div></div>`
@@ -541,8 +579,9 @@ function receiptFromApi(resp){
     $('#revList').innerHTML = pend.map(e => {
       const o = dup[e.id] && expenses.find(x => x.id===dup[e.id]);
       return `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>
-        <span class="muted">${e.date.split('-').reverse().join('/')}${e.src?` <span class="tag">${esc(e.src)}</span>`:''}</span>
+        <span class="muted">${e.date.split('-').reverse().join('/')}${e.time?' '+esc(e.time):''}${e.card?' · ****'+esc(e.card):''}${e.src?` <span class="tag">${esc(e.src)}</span>`:''}</span>
         ${o?`<div class="warn">⚠️ ¿Repetido? Igual a “${esc(o.note||o.cat)}” del ${o.date.split('-').reverse().join('/')}</div>`:''}
+        <input class="why" data-id="${e.id}" value="${esc(e.why||'')}" placeholder="¿A qué se debió?" style="margin:4px 0;padding:7px 10px">
         <select class="catsel" data-id="${e.id}">${Object.keys(CATS).map(c=>`<option value="${c}" ${c===e.cat?'selected':''}>${CATS[c]} ${c}</option>`).join('')}</select></div>
         <div style="display:flex;align-items:center;gap:2px"><b>${money(e.amount)}</b>
         <button class="del" style="color:var(--ok)" data-ok="${e.id}" aria-label="Confirmar">✓</button>
@@ -553,6 +592,10 @@ function receiptFromApi(resp){
     const ok = ev.target.closest('[data-ok]'), d = ev.target.closest('.del[data-id]');
     if(ok){ const e = expenses.find(x => String(x.id)===ok.dataset.ok); if(e){ delete e.rev; persistE(); renderGastos(); } }
     else if(d && confirm('¿Eliminar este movimiento?')){ expenses = expenses.filter(e => String(e.id)!==d.dataset.id); persistE(); renderGastos(); }
+  };
+  $('#revList').oninput = ev => {
+    const w = ev.target.closest('.why'); if(!w) return;
+    const e = expenses.find(x => String(x.id)===w.dataset.id); if(e){ e.why = w.value.trim(); if(!e.why) delete e.why; persistE(); }
   };
   $('#revList').onchange = ev => {
     const sel = ev.target.closest('.catsel'); if(!sel) return;
@@ -584,7 +627,33 @@ function receiptFromApi(resp){
   };
 
   /* ---------- Importar Wallet ---------- */
+  function addBankRows(rows){
+    const keys = new Set(expenses.map(e => e.key).filter(Boolean));
+    let added = 0, last = null;
+    rows.forEach(r => {
+      if(keys.has(r.key)) return;
+      keys.add(r.key);
+      addExpense({ amount:r.amount, cat:autoCat(r.merchant), note:r.merchant, date:r.date, time:r.time, card:r.card, key:r.key, src:'correo', rev:false });
+      added++; if(!last || r.date>last) last = r.date;
+    });
+    if(last) viewYm = last.slice(0,7);
+    return added;
+  }
+  function askWhy(n){
+    renderGastos();
+    if(!n) return;
+    alert(n===1 ? 'Llegó 1 compra nueva con tarjeta. ¿A qué se debió? Cuéntame en “Por revisar”.'
+                : `Llegaron ${n} compras nuevas con tarjeta. ¿A qué se debió cada una? Cuéntame en “Por revisar”.`);
+    const first = document.querySelector('#revList .why[value=""]') || document.querySelector('#revList .why');
+    if(first){ first.scrollIntoView({block:'center'}); first.focus(); }
+  }
   function importText(txt){
+    const bank = parseBankMail(txt);
+    if(bank.length){
+      const n = addBankRows(bank);
+      if(!n){ renderGastos(); alert('Esas compras ya estaban importadas.'); } else askWhy(n);
+      return;
+    }
     const rows = parseLines(txt, today());
     if(!rows.length){ alert('No encontré movimientos válidos. Formato: 2026-10-09;12500;Comercio'); return; }
     const keys = new Set(expenses.map(e => e.key).filter(Boolean));
@@ -606,6 +675,41 @@ function receiptFromApi(resp){
     ev.target.value = '';
   };
   $('#impBtn').onclick = () => { importText($('#impText').value); $('#impText').value=''; };
+
+  /* ---------- Correos del banco (Google Apps Script) ---------- */
+  let correoUrl = load('correoUrl', ''), correoAt = load('correoAt', 0), syncing = false;
+  const renderCorreo = () => {
+    $('#correoUrl').value = correoUrl;
+    $('#correoInfo').textContent = !correoUrl ? 'Aún no conectas el script.'
+      : correoAt ? 'Última revisión: ' + new Date(correoAt).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'}) : 'Conectado, sin revisar todavía.';
+  };
+  async function syncCorreo(manual){
+    if(!correoUrl || syncing) return;
+    syncing = true; if(manual) $('#correoInfo').textContent = 'Revisando tu correo…';
+    try {
+      const u = new URL(correoUrl); u.searchParams.set('dias', correoAt ? '7' : '45');
+      const r = await fetch(u.toString(), { redirect:'follow' });
+      const d = await r.json();
+      if(d.error) throw new Error(d.error);
+      const rows = (d.correos||[]).flatMap(c => parseBankMail(c.texto));
+      correoAt = Date.now(); save('correoAt', correoAt);
+      const n = addBankRows(rows);
+      renderCorreo(); askWhy(n);
+      if(manual && !n) alert(rows.length ? 'No hay compras nuevas.' : 'No encontré avisos de compra en tu correo.');
+    } catch(e){
+      $('#correoInfo').textContent = 'No pude revisar el correo: ' + e.message;
+    } finally { syncing = false; }
+  }
+  $('#correoSave').onclick = () => {
+    const v = $('#correoUrl').value.trim();
+    if(v && !/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){ alert('La URL debe empezar con https://script.google.com/'); return; }
+    if(v && !/[?&]token=/.test(v)){ alert('Falta ?token=tu-clave al final de la URL.'); return; }
+    correoUrl = v; save('correoUrl', correoUrl); renderCorreo();
+    if(correoUrl) syncCorreo(true);
+  };
+  $('#correoSync').onclick = () => correoUrl ? syncCorreo(true) : alert('Primero pega y guarda la URL del script.');
+  const autoSync = () => { if(document.visibilityState==='visible' && Date.now()-correoAt > 5*60e3) syncCorreo(false); };
+  document.addEventListener('visibilitychange', autoSync);
 
   /* ================= CONTACTOS ================= */
   function addContact(name, phone){
@@ -866,7 +970,7 @@ function receiptFromApi(resp){
 
   /* ---------- Inicio ---------- */
   $('#gFecha').value = today();
-  renderChips(); renderGastos();
+  renderChips(); renderGastos(); renderCorreo(); autoSync();
 
   if('serviceWorker' in navigator){ window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{})); }
 })();

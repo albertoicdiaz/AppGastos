@@ -4,7 +4,7 @@ const fs=require('fs'),path=require('path'),assert=require('assert');
 const file=process.argv[2]||path.join(__dirname,'..','index.html');
 const html=fs.readFileSync(file,'utf8');
 const code=html.split('/*PURE-START*/')[1].split('/*PURE-END*/')[0];
-const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES,findDupes,sueldoFor,monthStats,calcBoleta,parseReceipt,buildReceiptRequest,receiptFromApi};')();
+const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES,findDupes,sueldoFor,monthStats,calcBoleta,parseReceipt,buildReceiptRequest,receiptFromApi,parseBankMail,bankKey};')();
 let ok=0,fail=0;const t=(n,f)=>{try{f();ok++}catch(e){fail++;console.log('FALLA',n,e.message)}};
 const eq=assert.deepStrictEqual;
 t('montos',()=>{eq(F.parseAmount('12.500'),12500);eq(F.parseAmount('12.500,00'),12500);eq(F.parseAmount('12500.50'),12501);eq(F.parseAmount('$ 1.234.567'),1234567);eq(F.parseAmount('abc'),0);eq(F.parseAmount(''),0);});
@@ -81,5 +81,34 @@ t('respuesta con error',()=>{
   assert.throws(()=>F.receiptFromApi({stop_reason:'refusal',content:[]}),/no pudo/);
   assert.throws(()=>F.receiptFromApi({type:'error',error:{message:'overloaded'}}),/overloaded/);
   assert.throws(()=>F.receiptFromApi({stop_reason:'max_tokens',content:[]}),/cortada/);
+});
+// Correos de Banco de Chile
+const MAIL='Alberto Ignacio Calvo Diaz:\n\nTe informamos que se ha realizado una compra por $1.000 con Tarjeta de Crédito ****1284 en EXPRESS VALDIVIA CTO el 11/10/2026 19:08.\n\nRevisa Saldos y Movimientos en App Mi Banco';
+t('correo banco ejemplo',()=>{
+  eq(F.parseBankMail(MAIL),[{date:'2026-10-11',time:'19:08',amount:1000,card:'1284',tipo:'credito',merchant:'EXPRESS VALDIVIA CTO',key:'bch|2026-10-11 19:08|1000|1284'}]);
+});
+t('correo banco html y reenviado',()=>{
+  const html='<p>Te informamos que se ha realizado una compra por <b>$45.990</b> con Tarjeta de Cr&eacute;dito ****1284 en<br>FALABELLA PLAZA EGANA el 2/9/2026 9:05.</p>';
+  const r=F.parseBankMail(html);eq(r.length,1);eq([r[0].amount,r[0].merchant,r[0].date,r[0].time],[45990,'FALABELLA PLAZA EGANA','2026-09-02','09:05']);
+  const fwd='---------- Forwarded message ---------\n> Te informamos que se ha realizado una compra\n> por $1.000 con Tarjeta de Crédito ****1284 en\n> EXPRESS VALDIVIA CTO el 11/10/2026 19:08.';
+  eq(F.parseBankMail(fwd).map(x=>x.merchant),['EXPRESS VALDIVIA CTO']);
+});
+t('correo banco varios y repetidos',()=>{
+  const r=F.parseBankMail(MAIL+'\n'+MAIL+'\nTe informamos que se ha realizado una compra por $12.500 con Tarjeta de Débito ****9876 en UBER TRIP el 12/10/2026 08:30.');
+  eq(r.map(x=>[x.amount,x.tipo,x.merchant]),[[1000,'credito','EXPRESS VALDIVIA CTO'],[12500,'debito','UBER TRIP']]);
+});
+t('correo banco que no es compra',()=>{eq(F.parseBankMail('Te informamos que se ha realizado una transferencia por $5.000'),[]);eq(F.parseBankMail(''),[]);});
+// Script de Gmail (integraciones/correo-bancochile.gs) con Gmail simulado
+t('script de gmail',()=>{
+  let gs=fs.readFileSync(path.join(__dirname,'..','integraciones','correo-bancochile.gs'),'utf8').replace("'CAMBIA-ESTA-CLAVE';","'secreta';");
+  let query='';
+  const msg={getId:()=>'m1',getDate:()=>new Date('2026-10-11T22:08:00Z'),getPlainBody:()=>MAIL,getBody:()=>''};
+  const GmailApp={search:(q)=>{query=q;return [{getMessages:()=>[msg]}];}};
+  const ContentService={MimeType:{JSON:'json'},createTextOutput:t=>({setMimeType:()=>({getContent:()=>t})})};
+  const doGet=new Function('GmailApp','ContentService','Logger',gs+';return doGet;')(GmailApp,ContentService,{log(){}});
+  eq(JSON.parse(doGet({parameter:{token:'x'}}).getContent()),{error:'clave incorrecta'});
+  const d=JSON.parse(doGet({parameter:{token:'secreta',dias:'7'}}).getContent());
+  eq(query,'from:enviodigital@bancochile.cl "compra por" newer_than:7d');
+  eq(d.correos.flatMap(c=>F.parseBankMail(c.texto)).map(x=>x.amount),[1000]);
 });
 console.log(`${ok} pruebas OK, ${fail} fallas`);process.exit(fail?1:0);
