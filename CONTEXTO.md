@@ -10,7 +10,7 @@ Idioma: español de Chile. Moneda: CLP, sin decimales. Teléfonos: si no traen c
 ## Archivos (todos en la misma carpeta, servidos por HTTPS)
 - `index.html`: toda la app (HTML, CSS y JS en un solo archivo, sin librerías ni servidor).
 - `manifest.json`: nombre "Mis Gastos", `display: standalone`, color #0f766e, íconos 192 y 512.
-- `sw.js`: service worker con caché (`gastos-v3`). Si se cambia algún archivo, subir el número de versión para que el iPhone actualice.
+- `sw.js`: service worker con caché (`gastos-v4`). Si se cambia algún archivo, subir el número de versión para que el iPhone actualice.
 - `icon-180.png`, `icon-192.png`, `icon-512.png`: íconos (recibo blanco sobre fondo verde).
 - `gastos-pwa.zip`: paquete de la versión inicial (v2), no incluye los cambios posteriores.
 - `pruebas/pure.test.js`: pruebas de las funciones puras. Correr con `node pruebas/pure.test.js`.
@@ -20,7 +20,7 @@ Repositorio: https://github.com/albertoicdiaz/AppGastos (privado).
 ## Cómo se publica
 Subir los archivos juntos a un hosting con HTTPS (GitHub Pages, Netlify o Vercel). En el iPhone: abrir la URL en Safari, Compartir, Añadir a pantalla de inicio.
 
-## Estructura de la app (3 pestañas)
+## Estructura de la app (4 pestañas: Gastos, Dividir, Periodos, Contactos)
 ### 1. Gastos
 - Resumen del mes con total y gráfico de torta por categoría. Se puede cambiar de mes con ‹ ›.
 - Sueldo líquido (de la liquidación) por mes: la torta muestra cada categoría como % del sueldo más un trozo "Disponible". Si un mes no tiene sueldo se usa el del último mes anterior que tenga. Sin sueldo, los % son sobre el total gastado.
@@ -43,7 +43,15 @@ Subir los archivos juntos a un hosting con HTTPS (GitHub Pages, Netlify o Vercel
 - El mensaje incluye: concepto, total, propina, la parte de esa persona, el detalle de todos y mis datos de transferencia (campo de texto guardado).
 - Extras: "Compartir resumen general" (Web Share o copiar), "Guardar mi parte en Mis gastos", "Nueva cuenta" (mantiene a las personas seleccionadas).
 
-### 3. Contactos
+### 3. Periodos (gastos compartidos)
+- Un periodo tiene nombre, fecha desde/hasta y una persona (un contacto, por ejemplo la pareja).
+- Toma automáticamente mis gastos con fecha dentro del periodo; cada uno se puede desmarcar si no es compartido.
+- Se anota aparte lo que pagó la otra persona (monto, nota, fecha); eso no entra en Mis gastos.
+- División: partes iguales o por porcentaje (deslizador de 5 en 5 y atajos 50/50, 60/40, 70/30, 80/20; el % es el mío).
+- Resultado: total, lo que pagó cada uno, lo que le corresponde a cada uno y quién le debe a quién. Botones WhatsApp/Mensaje con el detalle, "Marcar como saldado" y eliminar (no borra gastos).
+- Solo dos personas por periodo (yo y una más).
+
+### 4. Contactos
 - Lista de nombre y teléfono guardados localmente, con agregar, editar y eliminar.
 - iOS no permite que una web lea la agenda, así que los números se escriben a mano.
 
@@ -63,11 +71,12 @@ Una página web no puede leer Wallet ni el correo por sí sola. Solución sin se
 - `sueldos`: `{ 'YYYY-MM': monto líquido }`
 - `split`: `{concept, mode 'equal'|'consumo'|'boleta', total, tip, sel [ids de contactos], amounts {id: monto}, paid {id: bool}, meName, items [{id, name, qty, unit, who [ids, 'me' soy yo]}], boletaTotal}`
 - `banco`: texto con los datos de transferencia.
+- `periods`: `[{id, name, from, to, partner (id de contacto), mode 'equal'|'pct', myPct, excl [ids de gastos desmarcados], theirs [{id, amount, note, date}], settled}]`
 - `apiKey`: clave de API de Anthropic (opcional) para leer boletas automáticamente.
 Limitación importante: en iOS, Safari y la app instalada en la pantalla de inicio tienen almacenamiento separado, y si se desinstala la app se pierden los datos. No hay respaldo ni sincronización.
 
 ## Código: funciones puras (bloque `PURE-START`/`PURE-END` en el script)
-`autoCat`, `parseAmount`, `normDate`, `normPhone`, `calcSplit`, `parseLines`, `findDupes`, `sueldoFor`, `monthStats`, `calcBoleta`, `parseReceipt`, `buildReceiptRequest`, `receiptFromApi`. Están probadas con pruebas automáticas en Node (montos chilenos, teléfonos, fechas, categorías, división igual y por consumo, importación de líneas).
+`autoCat`, `parseAmount`, `normDate`, `normPhone`, `calcSplit`, `parseLines`, `findDupes`, `sueldoFor`, `monthStats`, `calcBoleta`, `parseReceipt`, `buildReceiptRequest`, `receiptFromApi`, `calcPeriod`. Están probadas con pruebas automáticas en Node (montos chilenos, teléfonos, fechas, categorías, división igual y por consumo, importación de líneas).
 Bug corregido: con 85.000 + 10% entre 5 personas daba $18.701 por error de coma flotante; ahora da $18.700 (se calcula el total en enteros antes de dividir y se redondea hacia arriba).
 
 ## Decisiones y límites conocidos

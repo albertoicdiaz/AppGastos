@@ -4,7 +4,7 @@ const fs=require('fs'),path=require('path'),assert=require('assert');
 const file=process.argv[2]||path.join(__dirname,'..','index.html');
 const html=fs.readFileSync(file,'utf8');
 const code=html.split('/*PURE-START*/')[1].split('/*PURE-END*/')[0];
-const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES,findDupes,sueldoFor,monthStats,calcBoleta,parseReceipt,buildReceiptRequest,receiptFromApi};')();
+const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES,findDupes,sueldoFor,monthStats,calcBoleta,parseReceipt,buildReceiptRequest,receiptFromApi,calcPeriod};')();
 let ok=0,fail=0;const t=(n,f)=>{try{f();ok++}catch(e){fail++;console.log('FALLA',n,e.message)}};
 const eq=assert.deepStrictEqual;
 t('montos',()=>{eq(F.parseAmount('12.500'),12500);eq(F.parseAmount('12.500,00'),12500);eq(F.parseAmount('12500.50'),12501);eq(F.parseAmount('$ 1.234.567'),1234567);eq(F.parseAmount('abc'),0);eq(F.parseAmount(''),0);});
@@ -81,5 +81,23 @@ t('respuesta con error',()=>{
   assert.throws(()=>F.receiptFromApi({stop_reason:'refusal',content:[]}),/no pudo/);
   assert.throws(()=>F.receiptFromApi({type:'error',error:{message:'overloaded'}}),/overloaded/);
   assert.throws(()=>F.receiptFromApi({stop_reason:'max_tokens',content:[]}),/cortada/);
+});
+// Periodos compartidos
+const G=[{id:'a',amount:100000,date:'2026-10-01'},{id:'b',amount:50000,date:'2026-10-03'},{id:'c',amount:30000,date:'2026-10-05'},{id:'d',amount:9999,date:'2026-09-30'},{id:'e',amount:7777,date:'2026-10-06'}];
+t('periodo partes iguales',()=>{
+  const r=F.calcPeriod({from:'2026-10-01',to:'2026-10-05',mode:'equal',excl:[],theirs:[{amount:'40.000'}]},G);
+  eq(r.mine.map(e=>e.id),['a','b','c']);eq([r.paidMe,r.paidThem,r.total,r.myShare,r.theirShare,r.balance],[180000,40000,220000,110000,110000,70000]);
+});
+t('periodo 70/30 con excluido',()=>{
+  const r=F.calcPeriod({from:'2026-10-01',to:'2026-10-05',mode:'pct',myPct:70,excl:['c'],theirs:[]},G);
+  eq([r.total,r.myShare,r.theirShare,r.balance,r.pct],[150000,105000,45000,45000,70]);
+});
+t('periodo donde yo debo',()=>{
+  const r=F.calcPeriod({from:'2026-10-06',to:'2026-10-06',mode:'pct',myPct:70,theirs:[{amount:100000},{amount:3}]},G);
+  eq([r.total,r.myShare,r.theirShare,r.balance],[107780,75446,32334,-67669]);
+});
+t('periodo porcentaje fuera de rango y sin fechas',()=>{
+  eq(F.calcPeriod({from:'2026-10-01',to:'2026-10-01',mode:'pct',myPct:150},G).pct,100);
+  eq(F.calcPeriod({mode:'equal'},G).total,0);
 });
 console.log(`${ok} pruebas OK, ${fail} fallas`);process.exit(fail?1:0);
