@@ -29,7 +29,8 @@ h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:600;text-transf
 label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font-size:16px;font-family:inherit}
 textarea{min-height:64px;resize:vertical}
-.row{display:flex;gap:10px}.row>*{flex:1}
+.row{display:flex;gap:10px}.row>*{flex:1;min-width:0}
+input[type=date]{min-width:0;-webkit-appearance:none;appearance:none}
 button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 14px;background:var(--accent);color:var(--accent-ink);width:100%;margin-top:12px}
 button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
 button.small{width:auto;margin:0;padding:8px 12px;font-size:14px}
@@ -45,7 +46,8 @@ button.small{width:auto;margin:0;padding:8px 12px;font-size:14px}
 .seg button{margin:0;background:transparent;color:var(--muted);padding:9px}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-nav button{margin:0;border-radius:0;background:transparent;color:var(--muted);padding:14px 4px;font-size:14px}
+nav button{margin:0;border-radius:0;background:transparent;color:var(--muted);padding:8px 2px 10px;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px;white-space:nowrap}
+nav button span{font-size:20px;line-height:1}
 nav button.on{color:var(--accent)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .chip{width:auto;margin:0;padding:8px 12px;font-size:14px;font-weight:500;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:999px}
@@ -62,6 +64,28 @@ details summary{font-weight:600;cursor:pointer;padding:2px 0}
 details ol{padding-left:20px;margin:10px 0}
 code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 .hide{display:none}
+.pie{display:flex;gap:14px;align-items:center;margin-top:12px}
+.pie svg{flex:0 0 140px;width:140px;height:140px}
+.legend{flex:1;min-width:0;font-size:14px}
+.legend div{display:flex;align-items:center;gap:6px;padding:2px 0}
+.legend i{flex:0 0 10px;height:10px;border-radius:3px}
+.legend span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.warn{color:var(--danger);font-size:13px}
+.tag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 5px;margin-left:4px}
+.it{border-top:1px solid var(--line);padding:10px 0}
+.it:first-child{border-top:0}
+.it .row input{padding:8px 10px}
+.it .chips .chip{padding:5px 10px;font-size:13px}
+.check{padding:10px 12px;border-radius:10px;margin-top:10px;font-size:14px;border:1px solid var(--line)}
+.check.ok{color:var(--ok);border-color:var(--ok)}
+.check.bad{color:var(--danger);border-color:var(--danger)}
+.chk{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.chk:first-child{border-top:0}
+.chk input{width:22px;height:22px;flex:0 0 22px;accent-color:var(--accent)}
+.chk .l{flex:1;min-width:0}.chk .l b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.chk.off .l{opacity:.45;text-decoration:line-through}
+input[type=range]{padding:0;border:0;background:none;accent-color:var(--accent)}
+.sum{display:flex;justify-content:space-between;padding:4px 0}
 </style>
 </head>
 <body>
@@ -78,7 +102,23 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
         <button class="ghost small" id="mNext" aria-label="Mes siguiente">›</button>
       </div>
       <div class="big" id="totalMes">$0</div>
-      <div id="porCat" style="margin-top:12px"></div>
+      <div class="muted" id="sueldoInfo"></div>
+      <div id="porCat"></div>
+      <details style="margin-top:10px">
+        <summary class="muted">💼 Sueldo líquido de este mes</summary>
+        <div class="row" style="align-items:center;margin-top:6px">
+          <input id="sueldo" type="number" inputmode="numeric" placeholder="Ej: 1500000">
+          <button class="small" id="sueldoSave" style="flex:0 0 auto">Guardar</button>
+        </div>
+        <div class="muted" style="margin-top:6px">El monto líquido de tu liquidación. Se usa también en los meses siguientes hasta que lo cambies.</div>
+      </details>
+    </div>
+
+    <div class="card hide" id="revCard">
+      <div class="row" style="align-items:center;justify-content:space-between"><h2 style="margin:0">Por revisar</h2>
+        <button class="small ghost" id="revAll" style="flex:0 0 auto">Confirmar todos</button></div>
+      <div class="muted" style="margin-top:6px">Movimientos importados. Revisa la categoría y confirma, o elimina los repetidos.</div>
+      <div id="revList" style="margin-top:6px"></div>
     </div>
 
     <div class="card">
@@ -127,10 +167,15 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
       <div class="seg" id="modo">
         <button data-m="equal" class="on">Partes iguales</button>
         <button data-m="consumo">Por consumo</button>
+        <button data-m="boleta">Por boleta</button>
       </div>
       <div id="boxEqual">
         <label>Total de la cuenta (sin propina)</label>
         <input id="sTotal" type="number" inputmode="numeric" placeholder="Ej: 85000">
+      </div>
+      <div id="boxBoleta" class="hide">
+        <label>Total de la boleta</label>
+        <input id="bTotal" type="number" inputmode="numeric" placeholder="El total impreso, con o sin propina">
       </div>
       <label>Propina %</label>
       <div class="row">
@@ -152,6 +197,35 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
       <div id="personas" style="margin-top:10px"></div>
     </div>
 
+    <div class="card hide" id="cardItems">
+      <h2>Productos de la boleta</h2>
+      <details>
+        <summary>📷 Leer la boleta desde una foto</summary>
+        <ol class="muted">
+          <li>Saca una foto a la boleta con la Cámara.</li>
+          <li>Ábrela en Fotos, mantén el dedo sobre el texto, toca <b>Seleccionar todo</b> y <b>Copiar</b> (Texto en vivo).</li>
+          <li>Pégalo aquí y toca <b>Leer productos</b>. Revisa y corrige lo que haga falta.</li>
+        </ol>
+        <textarea id="bText" placeholder="2 PISCO SOUR 4.500 9.000&#10;1 LOMO A LO POBRE 12.900&#10;TOTAL 21.900"></textarea>
+        <button class="ghost" id="bParse">Leer productos</button>
+      </details>
+      <div id="bAuto" class="hide" style="margin-top:10px">
+        <label for="bFoto" class="chip" style="display:block;text-align:center;padding:12px;font-weight:600;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px">📷 Foto de la boleta (automático)</label>
+        <input type="file" id="bFoto" accept="image/*" capture="environment" class="hide">
+        <div class="muted" id="bAutoMsg" style="margin-top:6px"></div>
+      </div>
+      <details style="margin-top:10px">
+        <summary class="muted">🔑 Lectura automática con Claude (opcional)</summary>
+        <p class="muted">Con tu clave de API de Anthropic, la app envía la foto a Claude y arma la lista sola. Cada foto cuesta unos pocos pesos y se cobra en tu cuenta de Anthropic. La clave queda guardada solo en este teléfono.</p>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-...">
+        <div class="row"><button class="ghost" id="apiSave">Guardar clave</button><button class="ghost" id="apiDel">Borrar clave</button></div>
+      </details>
+      <div class="muted" style="margin:8px 0 4px">Toca los nombres para marcar quién consumió cada producto. Si son varios, se divide entre ellos.</div>
+      <div id="items"></div>
+      <button class="ghost" id="bAdd">+ Agregar producto</button>
+      <div id="bCheck"></div>
+    </div>
+
     <div class="card">
       <h2>Resultado</h2>
       <div class="muted" id="resumen"></div>
@@ -167,6 +241,85 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
       <button id="shareAll">Compartir resumen general</button>
       <button class="ghost" id="saveMine">Guardar mi parte en Mis gastos</button>
       <button class="ghost" id="resetSplit">Nueva cuenta</button>
+    </div>
+  </section>
+
+  <!-- ================= PERIODOS ================= -->
+  <section id="tab-periodos" class="hide">
+    <div id="perList">
+      <h1>Periodos compartidos</h1>
+      <div class="card">
+        <h2>Nuevo periodo</h2>
+        <div class="muted">Por ejemplo unas vacaciones: se suman tus gastos entre esas fechas y lo que pagó la otra persona, y se divide.</div>
+        <label>Nombre</label>
+        <input id="perName" type="text" placeholder="Ej: Vacaciones en La Serena">
+        <div class="row">
+          <div><label>Desde</label><input id="perFrom" type="date"></div>
+          <div><label>Hasta</label><input id="perTo" type="date"></div>
+        </div>
+        <button id="perCreate">Crear periodo</button>
+      </div>
+      <div class="card">
+        <h2>Mis periodos</h2>
+        <div id="perItems"></div>
+      </div>
+    </div>
+
+    <div id="perDetail" class="hide">
+      <div class="monthnav" style="margin:4px 0 10px"><button class="ghost small" id="perBack">‹ Periodos</button><span></span></div>
+      <div class="card">
+        <label>Nombre</label>
+        <input id="pdName" type="text">
+        <div class="row">
+          <div><label>Desde</label><input id="pdFrom" type="date"></div>
+          <div><label>Hasta</label><input id="pdTo" type="date"></div>
+        </div>
+        <label>Con quién</label>
+        <div class="chips" id="pdWho"></div>
+      </div>
+
+      <div class="card">
+        <h2>Cómo dividir</h2>
+        <div class="seg" id="pdMode">
+          <button data-m="equal">Partes iguales</button>
+          <button data-m="pct">Por porcentaje</button>
+        </div>
+        <div id="pdPctBox" class="hide">
+          <div class="sum" style="margin-top:12px"><b id="pdPctMe">Yo 50%</b><b id="pdPctThem">50%</b></div>
+          <input id="pdPct" type="range" min="0" max="100" step="5" value="50">
+          <div class="chips" id="pdPctPre">
+            <button type="button" class="chip" data-p="50">50 / 50</button>
+            <button type="button" class="chip" data-p="60">60 / 40</button>
+            <button type="button" class="chip" data-p="70">70 / 30</button>
+            <button type="button" class="chip" data-p="80">80 / 20</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Lo que pagué yo</h2>
+        <div class="muted" style="margin-bottom:4px">Tus gastos entre esas fechas. Desmarca los que no son compartidos.</div>
+        <div id="pdMine"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="pdTheirsTitle">Lo que pagó la otra persona</h2>
+        <div id="pdTheirs"></div>
+        <div class="row" style="margin-top:8px">
+          <input id="ptAmount" type="number" inputmode="numeric" placeholder="Monto">
+          <input id="ptDate" type="date">
+        </div>
+        <input id="ptNote" type="text" placeholder="Ej: Bencina" style="margin-top:8px">
+        <button class="ghost" id="ptAdd">+ Agregar</button>
+      </div>
+
+      <div class="card">
+        <h2>Resultado</h2>
+        <div id="pdResult"></div>
+        <div class="btns" id="pdSend" style="margin-top:10px;justify-content:stretch"></div>
+        <button class="ghost" id="pdSettle">Marcar como saldado</button>
+        <button class="ghost" id="pdDelete" style="color:var(--danger)">Eliminar periodo</button>
+      </div>
     </div>
   </section>
 
@@ -190,9 +343,10 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
 </main>
 
 <nav>
-  <button id="nav-gastos" class="on">💰 Gastos</button>
-  <button id="nav-dividir">🧾 Dividir</button>
-  <button id="nav-contactos">👥 Contactos</button>
+  <button id="nav-gastos" class="on"><span>💰</span>Gastos</button>
+  <button id="nav-dividir"><span>🧾</span>Dividir</button>
+  <button id="nav-periodos"><span>🏖️</span>Periodos</button>
+  <button id="nav-contactos"><span>👥</span>Contactos</button>
 </nav>
 
 <script>
@@ -257,6 +411,132 @@ function parseLines(txt, todayStr){
   });
   return out;
 }
+/* ---- Validación de movimientos ---- */
+function dayNum(s){ const [y,m,d] = String(s).split('-').map(Number); return Date.UTC(y,(m||1)-1,d||1)/864e5; }
+function findDupes(list){
+  // Para cada movimiento por revisar, busca otro con el mismo monto y fecha a ±2 días
+  const out = {};
+  list.forEach(e => {
+    if(e.rev!==false) return;
+    const o = list.find(x => x.id!==e.id && x.amount===e.amount && Math.abs(dayNum(x.date)-dayNum(e.date))<=2 && (x.rev!==false || String(x.id)<String(e.id)));
+    if(o) out[e.id] = o.id;
+  });
+  return out;
+}
+/* ---- Sueldo y torta ---- */
+function sueldoFor(sueldos, ym){
+  const ks = Object.keys(sueldos||{}).filter(k => k<=ym && sueldos[k]>0).sort();
+  return ks.length ? sueldos[ks[ks.length-1]] : 0;
+}
+function monthStats(list, ym, sueldo){
+  const cats = {};
+  list.filter(e => e.date.startsWith(ym)).forEach(e => cats[e.cat] = (cats[e.cat]||0)+e.amount);
+  const total = Object.values(cats).reduce((a,b)=>a+b,0);
+  const base = sueldo>0 ? Math.max(sueldo,total) : total;
+  const slices = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amount]) => ({ cat, amount, pct: base ? amount/base*100 : 0 }));
+  const libre = sueldo>0 ? sueldo-total : 0;
+  if(libre>0) slices.push({ cat:'Disponible', amount:libre, pct: libre/base*100 });
+  return { total, sueldo, libre, slices, pctSueldo: sueldo>0 ? total/sueldo*100 : 0 };
+}
+/* ---- Dividir por boleta ---- */
+function calcBoleta(items, people, tipPct, boletaTotal){
+  const tip = Math.max(0, parseFloat(tipPct)||0);
+  const idx = {}; people.forEach((p,i) => idx[p.id] = i);
+  const bases = people.map(()=>0), detail = people.map(()=>[]);
+  let subtotal = 0, unassigned = 0;
+  (items||[]).forEach(it => {
+    const line = Math.round((parseFloat(it.qty)||0) * (parseFloat(it.unit)||0));
+    subtotal += line;
+    const who = (it.who||[]).filter(id => id in idx);
+    if(!who.length){ unassigned += line; return; }
+    who.forEach(id => { bases[idx[id]] += line/who.length; detail[idx[id]].push({ name:it.name, qty:it.qty, share: line/who.length, shared: who.length }); });
+  });
+  const parts = bases.map(b => Math.round(b*(100+tip)/100));
+  const grand = Math.round(subtotal*(100+tip)/100);
+  const bt = parseAmount(boletaTotal);
+  let match = null;                                   // 'sin' | 'con' | null
+  if(bt>0){ if(bt===subtotal) match='sin'; else if(Math.abs(bt-grand)<=1) match='con'; }
+  return { tip, n:people.length, bases, parts, detail, subtotal, grand, base:subtotal, unassigned, boleta:bt, match, diff: bt>0 ? bt-subtotal : 0 };
+}
+const SKIP_RE = /rut|boleta|factura|fecha|hora|mesa|garz|mesero|caja|cajer|giro|direcc|tel[eé]f|gracias|exento|\biva\b|neto|efectivo|tarjeta|vuelto|cambio|redcompra|d[eé]bito|cr[eé]dito|visa|master|folio|timbre|\bsii\b|descuento|comensal|atendido|n[°º]/i;
+function parseReceipt(txt){
+  const res = { items:[], total:0, subtotal:0, propina:0, totalTip:0 };
+  String(txt||'').split(/\r?\n/).forEach(raw => {
+    const line = raw.replace(/\s+/g,' ').trim(); if(!line) return;
+    const nums = line.match(/\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?/g) || [];
+    if(/total|propina/i.test(line)){
+      const v = nums.length ? parseAmount(nums[nums.length-1]) : 0;
+      if(/propina|servicio/i.test(line) && /total/i.test(line)) res.totalTip = v;
+      else if(/propina|servicio/i.test(line)) res.propina = v;
+      else if(/sub\s*-?\s*total/i.test(line)) res.subtotal = v;
+      else if(!res.total) res.total = v;
+      return;
+    }
+    if(SKIP_RE.test(line) || !nums.length || !/[a-záéíóúñ]{2}/i.test(line)) return;
+    let rest = line, qty = 1, unit = 0;
+    const lineTotal = parseAmount(nums[nums.length-1]);
+    if(!(lineTotal>0)) return;
+    let m = rest.match(/^(\d{1,2})\s*[xX*]?\s+(?=\D)/);       // "2 PISCO..." o "2 x PISCO..."
+    if(m && nums.length>=2){ qty = +m[1]; rest = rest.slice(m[0].length); }
+    else if((m = rest.match(/(\d{1,2})\s*[xX*]\s*\$?(\d{1,3}(?:\.\d{3})+|\d+)/))){ qty = +m[1]; unit = parseAmount(m[2]); rest = rest.replace(m[0],' '); }
+    const others = (rest.match(/\$?\s?\d{1,3}(?:\.\d{3})+|\$?\s?\d{3,}/g)||[]).map(parseAmount).slice(0,-1);
+    if(!unit){ const u = others.find(v => v*qty===lineTotal); unit = u || Math.round(lineTotal/qty); }
+    const name = rest.replace(/\$?\s?\d{1,3}(?:\.\d{3})+(?:,\d+)?|\$?\s?\d+(?:,\d+)?/g,' ').replace(/(^|\s)[$*xX](?=\s|$)/g,' ').replace(/\s+/g,' ').trim();
+    if(name.length<2) return;
+    res.items.push({ name, qty, unit });
+  });
+  return res;
+}
+/* ---- Lectura automática de boleta con Claude ---- */
+const RECEIPT_SCHEMA = {
+  type:'object', additionalProperties:false,
+  required:['items','subtotal','propina','total','total_con_propina'],
+  properties:{
+    items:{ type:'array', items:{ type:'object', additionalProperties:false, required:['nombre','cantidad','precio_unitario','total_linea'],
+      properties:{ nombre:{type:'string'}, cantidad:{type:'number'}, precio_unitario:{type:'number'}, total_linea:{type:'number'} } } },
+    subtotal:{type:'number'}, propina:{type:'number'}, total:{type:'number'}, total_con_propina:{type:'number'}
+  }
+};
+function buildReceiptRequest(b64, mediaType){
+  return {
+    model:'claude-opus-5-5', max_tokens:16000,
+    output_config:{ effort:'low', format:{ type:'json_schema', schema:RECEIPT_SCHEMA } },
+    fallbacks:'default',
+    messages:[{ role:'user', content:[
+      { type:'image', source:{ type:'base64', media_type:mediaType, data:b64 } },
+      { type:'text', text:'Es la foto de una boleta o cuenta de un restaurante en Chile (pesos chilenos, sin decimales; el punto separa miles). '
+        + 'Extrae cada producto consumido con su nombre, cantidad, precio unitario y total de la línea, tal como aparecen. '
+        + 'Si falta el precio unitario, calcúlalo como total de la línea dividido por la cantidad. No incluyas propina, descuentos ni totales como productos. '
+        + 'Indica el subtotal, la propina, el total sin propina y el total con propina impresos; usa 0 para los que no aparezcan.' }
+    ]}]
+  };
+}
+function receiptFromApi(resp){
+  if(!resp || resp.type==='error') throw new Error((resp && resp.error && resp.error.message) || 'Respuesta vacía');
+  if(resp.stop_reason==='refusal') throw new Error('Claude no pudo leer esta imagen');
+  if(resp.stop_reason==='max_tokens') throw new Error('La respuesta quedó cortada');
+  const block = (resp.content||[]).filter(b => b.type==='text').pop();
+  if(!block) throw new Error('No llegó texto en la respuesta');
+  const d = JSON.parse(block.text);
+  const int = v => Math.max(0, Math.round(Number(v)||0));
+  const items = (d.items||[]).map(it => {
+    const qty = int(it.cantidad) || 1, line = int(it.total_linea);
+    return { name:String(it.nombre||'').trim(), qty, unit: int(it.precio_unitario) || Math.round(line/qty) };
+  }).filter(it => it.name && it.unit>0);
+  return { items, subtotal:int(d.subtotal), propina:int(d.propina), total:int(d.total), totalTip:int(d.total_con_propina) };
+}
+/* ---- Periodos compartidos (vacaciones, etc.) ---- */
+function calcPeriod(p, list){
+  const excl = p.excl || [];
+  const mine = (list||[]).filter(e => p.from && p.to && e.date>=p.from && e.date<=p.to && !excl.includes(e.id));
+  const theirs = p.theirs || [];
+  const paidMe = mine.reduce((a,e)=>a+(e.amount||0),0);
+  const paidThem = theirs.reduce((a,e)=>a+(parseAmount(e.amount)||0),0);
+  const total = paidMe + paidThem;
+  const pct = p.mode==='pct' ? Math.min(100, Math.max(0, parseFloat(p.myPct)||0)) : 50;
+  const myShare = Math.round(total*pct/100), theirShare = total - myShare;
+  return { mine, theirs, paidMe, paidThem, total, pct, myShare, theirShare, balance: paidMe - myShare };  // balance > 0: la otra persona me debe
+}
 /*PURE-END*/
 
   const $ = s => document.querySelector(s);
@@ -270,8 +550,10 @@ function parseLines(txt, todayStr){
 
   let expenses = load('expenses', []);
   let contacts = load('contacts', []);
-  let split = Object.assign({ concept:'', mode:'equal', total:'', tip:10, sel:[], amounts:{}, paid:{}, meName:'Yo' }, load('split', {}));
+  let split = Object.assign({ concept:'', mode:'equal', total:'', tip:10, sel:[], amounts:{}, paid:{}, meName:'Yo', items:[], boletaTotal:'' }, load('split', {}));
   if(!Array.isArray(split.sel)) split.sel = [];
+  if(!Array.isArray(split.items)) split.items = [];
+  let sueldos = load('sueldos', {});
   let banco = load('banco', '');
   let selCat = 'Comida';
   let viewYm = today().slice(0,7);
@@ -279,18 +561,22 @@ function parseLines(txt, todayStr){
   const persistE = () => save('expenses', expenses);
   const persistC = () => save('contacts', contacts);
   const persistS = () => save('split', split);
+  let periods = load('periods', []);
+  let openPer = null;
+  const persistP = () => save('periods', periods);
 
   /* ---------- Pestañas ---------- */
   function tab(t){
-    ['gastos','dividir','contactos'].forEach(x => {
+    ['gastos','dividir','periodos','contactos'].forEach(x => {
       $('#tab-'+x).classList.toggle('hide', x!==t);
       $('#nav-'+x).classList.toggle('on', x===t);
     });
     if(t==='dividir') renderDividir();
     if(t==='contactos') renderContactos();
+    if(t==='periodos') renderPeriodos();
     window.scrollTo(0,0);
   }
-  ['gastos','dividir','contactos'].forEach(x => $('#nav-'+x).onclick = () => tab(x));
+  ['gastos','dividir','periodos','contactos'].forEach(x => $('#nav-'+x).onclick = () => tab(x));
 
   /* ================= MIS GASTOS ================= */
   function renderChips(){
@@ -307,23 +593,77 @@ function parseLines(txt, todayStr){
   function renderGastos(){
     $('#mesTitulo').textContent = ymLabel(viewYm);
     const mes = expenses.filter(e => e.date.startsWith(viewYm));
-    const total = mes.reduce((a,e)=>a+e.amount,0);
-    $('#totalMes').textContent = money(total);
-    const cats = {};
-    mes.forEach(e => cats[e.cat] = (cats[e.cat]||0)+e.amount);
-    $('#porCat').innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v]) =>
-      `<div class="row" style="justify-content:space-between"><span>${CATS[c]||'📦'} ${esc(c)}</span><span class="muted" style="text-align:right">${money(v)} · ${total?Math.round(v/total*100):0}%</span></div>
-       <div class="bar"><i style="width:${total?Math.round(v/total*100):0}%"></i></div>`).join('')
-       || '<div class="muted">Sin gastos este mes.</div>';
+    const sueldo = sueldoFor(sueldos, viewYm);
+    const st = monthStats(expenses, viewYm, sueldo);
+    $('#totalMes').textContent = money(st.total);
+    $('#sueldo').value = sueldos[viewYm] || '';
+    $('#sueldo').placeholder = sueldo ? String(sueldo) : 'Ej: 1500000';
+    $('#sueldoInfo').innerHTML = sueldo
+      ? (st.libre>=0 ? `${Math.round(st.pctSueldo)}% de tu sueldo de ${money(sueldo)} · te quedan <b>${money(st.libre)}</b>`
+                     : `<span class="warn">Gastaste ${money(-st.libre)} más que tu sueldo de ${money(sueldo)}</span>`)
+      : 'Ingresa tu sueldo abajo para ver qué parte se va en cada categoría.';
+    $('#porCat').innerHTML = st.slices.length ? pieHtml(st.slices, sueldo) : '<div class="muted" style="margin-top:10px">Sin gastos este mes.</div>';
+    renderRevisar();
 
     const sorted = [...mes].sort((a,b)=> b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
     $('#lista').innerHTML = sorted.map(e =>
       `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>
-         <span class="muted">${e.date.split('-').reverse().join('/')}</span>
+         <span class="muted">${e.date.split('-').reverse().join('/')}${e.rev===false?' <span class="tag">por revisar</span>':''}</span>
          <select class="catsel" data-id="${e.id}">${Object.keys(CATS).map(c=>`<option value="${c}" ${c===e.cat?'selected':''}>${CATS[c]} ${c}</option>`).join('')}</select></div>
        <div style="display:flex;align-items:center;gap:4px"><b>${money(e.amount)}</b><button class="del" data-id="${e.id}" aria-label="Eliminar">×</button></div></div>`
     ).join('') || '<div class="muted">Sin movimientos.</div>';
   }
+
+  const COLORS = {Comida:'#f59e0b', Supermercado:'#10b981', Transporte:'#3b82f6', Hogar:'#8b5cf6', Ocio:'#ec4899', Salud:'#ef4444',
+    Cuentas:'#eab308', Suscripciones:'#06b6d4', Compras:'#f97316', Otros:'#64748b', Disponible:'var(--line)'};
+  function pieHtml(slices, sueldo){
+    const R = 15.9155, C = 100;                  // circunferencia = 100 para usar porcentajes directo
+    let off = 0;
+    const arcs = slices.map(x => {
+      const a = `<circle r="${R}" cx="21" cy="21" fill="none" stroke="${COLORS[x.cat]||'#94a3b8'}" stroke-width="7"
+        stroke-dasharray="${x.pct.toFixed(3)} ${(C-x.pct).toFixed(3)}" stroke-dashoffset="${(25-off).toFixed(3)}"></circle>`;
+      off += x.pct; return a;
+    }).join('');
+    const legend = slices.map(x => `<div><i style="background:${COLORS[x.cat]||'#94a3b8'}"></i><span>${x.cat==='Disponible'?'✅':(CATS[x.cat]||'📦')} ${esc(x.cat)}</span>
+      <b>${Math.round(x.pct)}%</b></div><div class="muted" style="padding:0 0 4px 16px">${money(x.amount)}</div>`).join('');
+    return `<div class="pie"><svg viewBox="0 0 42 42" role="img" aria-label="Gastos por categoría">${arcs}
+      <text x="21" y="20" text-anchor="middle" font-size="5" font-weight="700" fill="currentColor">${sueldo?Math.round(Math.min(100,slices.filter(x=>x.cat!=='Disponible').reduce((a,b)=>a+b.pct,0)))+'%':''}</text>
+      <text x="21" y="26" text-anchor="middle" font-size="3.2" fill="currentColor" opacity=".6">${sueldo?'del sueldo':''}</text></svg>
+      <div class="legend">${legend}</div></div>`;
+  }
+  $('#sueldoSave').onclick = () => {
+    const v = parseAmount($('#sueldo').value);
+    if(v>0) sueldos[viewYm] = v; else delete sueldos[viewYm];
+    save('sueldos', sueldos); renderGastos();
+  };
+
+  /* ---------- Por revisar ---------- */
+  function renderRevisar(){
+    const pend = expenses.filter(e => e.rev===false).sort((a,b)=>b.date.localeCompare(a.date));
+    $('#revCard').classList.toggle('hide', !pend.length);
+    if(!pend.length){ $('#revList').innerHTML=''; return; }
+    const dup = findDupes(expenses);
+    $('#revList').innerHTML = pend.map(e => {
+      const o = dup[e.id] && expenses.find(x => x.id===dup[e.id]);
+      return `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>
+        <span class="muted">${e.date.split('-').reverse().join('/')}${e.src?` <span class="tag">${esc(e.src)}</span>`:''}</span>
+        ${o?`<div class="warn">⚠️ ¿Repetido? Igual a “${esc(o.note||o.cat)}” del ${o.date.split('-').reverse().join('/')}</div>`:''}
+        <select class="catsel" data-id="${e.id}">${Object.keys(CATS).map(c=>`<option value="${c}" ${c===e.cat?'selected':''}>${CATS[c]} ${c}</option>`).join('')}</select></div>
+        <div style="display:flex;align-items:center;gap:2px"><b>${money(e.amount)}</b>
+        <button class="del" style="color:var(--ok)" data-ok="${e.id}" aria-label="Confirmar">✓</button>
+        <button class="del" data-id="${e.id}" aria-label="Eliminar">×</button></div></div>`;
+    }).join('');
+  }
+  $('#revList').onclick = ev => {
+    const ok = ev.target.closest('[data-ok]'), d = ev.target.closest('.del[data-id]');
+    if(ok){ const e = expenses.find(x => String(x.id)===ok.dataset.ok); if(e){ delete e.rev; persistE(); renderGastos(); } }
+    else if(d && confirm('¿Eliminar este movimiento?')){ expenses = expenses.filter(e => String(e.id)!==d.dataset.id); persistE(); renderGastos(); }
+  };
+  $('#revList').onchange = ev => {
+    const sel = ev.target.closest('.catsel'); if(!sel) return;
+    const e = expenses.find(x => String(x.id)===sel.dataset.id); if(e){ e.cat = sel.value; persistE(); }
+  };
+  $('#revAll').onclick = () => { expenses.forEach(e => { if(e.rev===false) delete e.rev; }); persistE(); renderGastos(); };
 
   function addExpense(o){
     expenses.push(Object.assign({ id: uid() }, o));
@@ -358,7 +698,7 @@ function parseLines(txt, todayStr){
       const key = `${r.date}|${r.amount}|${r.merchant.toLowerCase()}`;
       if(keys.has(key)){ dup++; return; }
       keys.add(key);
-      addExpense({ amount:r.amount, cat:autoCat(r.merchant), note:r.merchant, date:r.date, key, src:'wallet' });
+      addExpense({ amount:r.amount, cat:autoCat(r.merchant), note:r.merchant, date:r.date, key, src:'wallet', rev:false });
       added++; last = r.date;
     });
     if(last) viewYm = last.slice(0,7);
@@ -414,12 +754,16 @@ function parseLines(txt, todayStr){
   const people = () => [{ id:'me', name:split.meName||'Yo', phone:'' }]
     .concat(split.sel.map(id => contacts.find(c=>c.id===id)).filter(Boolean));
 
+  const calc = ps => split.mode==='boleta' ? calcBoleta(split.items, ps, split.tip, split.boletaTotal) : calcSplit(split, ps);
+
   function msgFor(p, i, r){
     const first = p.name.split(' ')[0];
     const label = split.concept.trim() || 'La cuenta';
     let t = `Hola ${first} 👋\n${label}: ${money(r.base)}` + (r.tip?` + ${r.tip}% de propina`:'') + ` = ${money(r.grand)}\n\n`;
     t += `Tu parte: *${money(r.parts[i])}*`;
-    if(split.mode==='consumo') t += ` (consumo ${money(r.bases[i])} + propina ${money(r.parts[i]-r.bases[i])})`;
+    if(split.mode!=='equal') t += ` (consumo ${money(r.bases[i])} + propina ${money(r.parts[i]-r.bases[i])})`;
+    if(split.mode==='boleta' && r.detail[i].length)
+      t += `\n\nLo tuyo:\n` + r.detail[i].map(d => `• ${d.qty>1?d.qty+' ':''}${d.name}${d.shared>1?` (compartido entre ${d.shared})`:''}: ${money(d.share)}`).join('\n');
     t += `\n\nDetalle:\n` + people().map((q,j)=>`• ${q.name}: ${money(r.parts[j])}`).join('\n');
     if(banco.trim()) t += `\n\nDatos para transferir:\n${banco.trim()}`;
     return t;
@@ -440,11 +784,39 @@ function parseLines(txt, todayStr){
     ).join('');
   }
 
+  function renderItems(){
+    const ps = people();
+    $('#items').innerHTML = split.items.map((it,k) => `<div class="it" data-k="${k}">
+      <div class="row"><input data-f="name" type="text" placeholder="Producto" value="${esc(it.name||'')}" style="flex:3">
+        <button class="del" data-rm="${k}" aria-label="Quitar" style="flex:0 0 auto">×</button></div>
+      <div class="row" style="margin-top:6px;align-items:center">
+        <input data-f="qty" type="number" inputmode="numeric" placeholder="Cant." value="${esc(it.qty??'')}">
+        <input data-f="unit" type="number" inputmode="numeric" placeholder="Precio unit." value="${esc(it.unit??'')}" style="flex:2">
+        <b style="flex:2;text-align:right" data-line="${k}">${money((parseFloat(it.qty)||0)*(parseFloat(it.unit)||0))}</b></div>
+      <div class="chips">${ps.map(p => `<button type="button" class="chip ${(it.who||[]).includes(p.id)?'on':''}" data-who="${p.id}">${esc(p.name)}</button>`).join('')}</div>
+    </div>`).join('') || '<div class="muted">Aún no hay productos. Pega el texto de la boleta o agrégalos a mano.</div>';
+    renderCheck();
+  }
+  function renderCheck(){
+    const r = calc(people());
+    let h = `<div class="check">Suma de productos: <b>${money(r.subtotal)}</b> · con ${r.tip}% propina: <b>${money(r.grand)}</b></div>`;
+    if(r.unassigned) h += `<div class="check bad">⚠️ Hay ${money(r.unassigned)} en productos sin asignar a nadie.</div>`;
+    if(r.boleta>0){
+      if(r.match==='sin') h += `<div class="check ok">✓ Calza con el total de la boleta (sin propina).</div>`;
+      else if(r.match==='con') h += `<div class="check ok">✓ Calza con el total de la boleta (con propina).</div>`;
+      else h += `<div class="check bad">✗ No calza: la boleta dice ${money(r.boleta)} y los productos suman ${money(r.subtotal)} (diferencia ${money(Math.abs(r.diff))}${r.diff>0?' de menos':' de más'}). Revisa cantidades y precios.</div>`;
+    } else h += `<div class="check">Ingresa el total de la boleta arriba para comprobar que calce.</div>`;
+    $('#bCheck').innerHTML = h;
+  }
+
   function renderResultado(){
-    const ps = people(), r = calcSplit(split, ps);
+    const ps = people(), r = calc(ps);
     $('#boxEqual').classList.toggle('hide', split.mode!=='equal');
+    $('#boxBoleta').classList.toggle('hide', split.mode!=='boleta');
+    $('#cardItems').classList.toggle('hide', split.mode!=='boleta');
+    if(split.mode==='boleta') renderCheck();
     if(ps.length<2){ $('#resumen').textContent='Agrega al menos una persona.'; $('#resultados').innerHTML=''; return; }
-    if(!(r.base>0)){ $('#resumen').textContent = split.mode==='equal' ? 'Ingresa el total para ver la división.' : 'Ingresa el consumo de cada persona.'; $('#resultados').innerHTML=''; return; }
+    if(!(r.base>0)){ $('#resumen').textContent = split.mode==='equal' ? 'Ingresa el total para ver la división.' : split.mode==='boleta' ? 'Agrega los productos y marca quién los consumió.' : 'Ingresa el consumo de cada persona.'; $('#resultados').innerHTML=''; return; }
     const suma = r.parts.reduce((a,b)=>a+b,0);
     $('#resumen').innerHTML = `Cuenta ${money(r.base)}${r.tip?` + propina ${money(r.base*r.tip/100)}`:''} = <b>${money(r.grand)}</b>`
       + (suma>Math.round(r.grand) ? `<br>Redondeado hacia arriba: se recauda ${money(suma)}.`:'');
@@ -460,18 +832,92 @@ function parseLines(txt, todayStr){
   }
 
   function renderDividir(){
-    $('#sConcepto').value = split.concept; $('#sTotal').value = split.total; $('#sTip').value = split.tip;
+    $('#sConcepto').value = split.concept; $('#sTotal').value = split.total; $('#sTip').value = split.tip; $('#bTotal').value = split.boletaTotal;
     $('#meName').value = split.meName; $('#banco').value = banco;
     document.querySelectorAll('#modo button').forEach(b => b.classList.toggle('on', b.dataset.m===split.mode));
-    renderChipsContactos(); renderPersonas(); renderResultado();
+    renderChipsContactos(); renderPersonas(); if(split.mode==='boleta') renderItems(); renderAuto(); renderResultado();
   }
 
   $('#modo').onclick = ev => { const b = ev.target.closest('button'); if(!b) return; split.mode=b.dataset.m; persistS(); renderDividir(); };
   $('#sConcepto').oninput = e => { split.concept = e.target.value; persistS(); };
   $('#sTotal').oninput = e => { split.total = e.target.value; persistS(); renderResultado(); };
   $('#sTip').oninput = e => { split.tip = e.target.value; persistS(); renderResultado(); };
+  $('#bTotal').oninput = e => { split.boletaTotal = e.target.value; persistS(); renderResultado(); };
+
+  /* ---------- Productos de la boleta ---------- */
+  $('#bParse').onclick = () => {
+    if(applyReceipt(parseReceipt($('#bText').value))) $('#bText').value = '';
+  };
+  /* ---------- Lectura automática (Claude) ---------- */
+  let apiKey = load('apiKey', '');
+  const renderAuto = () => { $('#bAuto').classList.toggle('hide', !apiKey); $('#apiKey').value = apiKey ? '••••••••' + apiKey.slice(-4) : ''; };
+  $('#apiSave').onclick = () => {
+    const v = $('#apiKey').value.trim();
+    if(v.startsWith('••')) return;
+    if(!v.startsWith('sk-')){ alert('La clave debería empezar con sk-ant-'); return; }
+    apiKey = v; save('apiKey', apiKey); renderAuto();
+  };
+  $('#apiDel').onclick = () => { apiKey = ''; try { localStorage.removeItem('apiKey'); } catch(e){} renderAuto(); };
+
+  function photoToJpeg(file){                    // reduce la foto a 1568 px para que viaje liviana
+    return new Promise((ok, fail) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const k = Math.min(1, 1568/Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        ok(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); fail(new Error('No pude abrir la foto')); };
+      img.src = url;
+    });
+  }
+  function applyReceipt(r){
+    if(!r.items.length){ alert('No encontré productos. Revisa que cada línea tenga nombre y precio.'); return false; }
+    if(split.items.length && !confirm(`Encontré ${r.items.length} productos. ¿Reemplazar los ${split.items.length} que ya tienes?`)) return false;
+    split.items = r.items.map(it => Object.assign({ id:uid(), who:[] }, it));
+    const tot = r.total || r.totalTip;
+    if(tot){ split.boletaTotal = String(tot); $('#bTotal').value = tot; }
+    persistS(); renderItems(); renderResultado(); return true;
+  }
+  $('#bFoto').onchange = async ev => {
+    const f = ev.target.files[0]; ev.target.value = ''; if(!f) return;
+    const msg = $('#bAutoMsg'); msg.textContent = 'Leyendo la boleta…';
+    try {
+      const b64 = await photoToJpeg(f);
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{ 'content-type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01',
+          'anthropic-beta':'server-side-fallback-2026-07-01', 'anthropic-dangerous-direct-browser-access':'true' },
+        body: JSON.stringify(buildReceiptRequest(b64, 'image/jpeg'))
+      });
+      const data = await res.json().catch(() => null);
+      if(res.status===401) throw new Error('la clave no es válida');
+      if(!res.ok) throw new Error((data && data.error && data.error.message) || ('error ' + res.status));
+      const r = receiptFromApi(data);
+      msg.textContent = applyReceipt(r) ? `Listo: ${r.items.length} productos. Revisa que estén bien y asigna a cada persona.` : '';
+    } catch(e){ msg.textContent = 'No se pudo leer: ' + e.message + '. Puedes usar Texto en vivo.'; }
+  };
+
+  $('#bAdd').onclick = () => { split.items.push({ id:uid(), name:'', qty:1, unit:'', who:[] }); persistS(); renderItems(); };
+  $('#items').oninput = ev => {
+    const f = ev.target.dataset.f, box = ev.target.closest('.it'); if(!f || !box) return;
+    const k = +box.dataset.k, it = split.items[k];
+    it[f] = ev.target.value;
+    $(`[data-line="${k}"]`).textContent = money((parseFloat(it.qty)||0)*(parseFloat(it.unit)||0));
+    persistS(); renderResultado();
+  };
+  $('#items').onclick = ev => {
+    const rm = ev.target.closest('[data-rm]'), w = ev.target.closest('[data-who]'), box = ev.target.closest('.it');
+    if(rm){ split.items.splice(+rm.dataset.rm,1); persistS(); renderItems(); renderResultado(); return; }
+    if(w && box){
+      const it = split.items[+box.dataset.k], id = w.dataset.who;
+      it.who = (it.who||[]).includes(id) ? it.who.filter(x=>x!==id) : (it.who||[]).concat(id);
+      persistS(); renderItems(); renderResultado();
+    }
+  };
   $('#sTipPre').onchange = e => { if(e.target.value!==''){ split.tip = e.target.value; $('#sTip').value = split.tip; persistS(); renderResultado(); } e.target.value=''; };
-  $('#meName').oninput = e => { split.meName = e.target.value; persistS(); renderPersonas(); renderResultado(); };
+  $('#meName').oninput = e => { split.meName = e.target.value; persistS(); renderPersonas(); if(split.mode==='boleta') renderItems(); renderResultado(); };
   $('#banco').oninput = e => { banco = e.target.value; save('banco', banco); };
 
   $('#chipsContactos').onclick = ev => {
@@ -493,7 +939,7 @@ function parseLines(txt, todayStr){
 
   $('#resultados').onclick = ev => {
     const wa = ev.target.closest('[data-wa]'), sms = ev.target.closest('[data-sms]'), pd = ev.target.closest('[data-paid]');
-    const ps = people(), r = calcSplit(split, ps);
+    const ps = people(), r = calc(ps);
     if(pd){ split.paid[pd.dataset.paid] = !split.paid[pd.dataset.paid]; persistS(); renderResultado(); return; }
     const i = +(wa ? wa.dataset.wa : sms ? sms.dataset.sms : -1); if(i<0) return;
     const p = ps[i], text = msgFor(p, i, r);
@@ -502,7 +948,7 @@ function parseLines(txt, todayStr){
   };
 
   $('#shareAll').onclick = async () => {
-    const ps = people(), r = calcSplit(split, ps); if(!(r.base>0)) return;
+    const ps = people(), r = calc(ps); if(!(r.base>0)) return;
     let t = `🧾 ${split.concept.trim()||'Cuenta'}: ${money(r.base)}` + (r.tip?` + ${r.tip}% propina`:'') + ` = ${money(r.grand)}\n\n`;
     t += ps.map((p,i)=>`• ${p.name}: ${money(r.parts[i])}`).join('\n');
     if(banco.trim()) t += `\n\nTransferir a:\n${banco.trim()}`;
@@ -513,14 +959,128 @@ function parseLines(txt, todayStr){
   };
 
   $('#saveMine').onclick = () => {
-    const r = calcSplit(split, people()); if(!(r.parts[0]>0)) return;
+    const r = calc(people()); if(!(r.parts[0]>0)) return;
     addExpense({ amount:r.parts[0], cat:'Comida', note:split.concept.trim() || 'Cuenta dividida (mi parte)', date:today() });
     viewYm = today().slice(0,7); renderGastos(); alert('Guardado en Mis gastos');
   };
 
   $('#resetSplit').onclick = () => {
     if(!confirm('¿Empezar una cuenta nueva? Se mantienen las personas seleccionadas.')) return;
-    split.concept=''; split.total=''; split.amounts={}; split.paid={}; persistS(); renderDividir();
+    split.concept=''; split.total=''; split.amounts={}; split.paid={}; split.items=[]; split.boletaTotal=''; persistS(); renderDividir();
+  };
+
+  /* ================= PERIODOS ================= */
+  const fmtD = d => d ? d.split('-').reverse().join('/') : '';
+  const perOf = () => periods.find(x => x.id===openPer);
+  const partnerOf = p => contacts.find(c => c.id===p.partner);
+  const balanceText = (r, name) => r.balance>0 ? `${esc(name)} te debe <b>${money(r.balance)}</b>`
+    : r.balance<0 ? `Le debes <b>${money(-r.balance)}</b> a ${esc(name)}` : 'Están a mano';
+
+  function renderPeriodos(){
+    $('#perList').classList.toggle('hide', !!openPer);
+    $('#perDetail').classList.toggle('hide', !openPer);
+    if(openPer) return renderPeriodo();
+    if(!$('#perFrom').value) $('#perFrom').value = today();
+    if(!$('#perTo').value) $('#perTo').value = today();
+    const list = [...periods].sort((a,b)=>b.from.localeCompare(a.from));
+    $('#perItems').innerHTML = list.map(p => {
+      const r = calcPeriod(p, expenses), who = partnerOf(p);
+      return `<div class="item" data-open="${p.id}" style="cursor:pointer"><div class="l"><b>${esc(p.name)}</b>
+        <span class="muted">${fmtD(p.from)} al ${fmtD(p.to)}${who?' · con '+esc(who.name):''}</span>
+        <div class="${p.settled?'paid':'muted'}" style="font-size:14px">${p.settled?'Saldado ✓':balanceText(r, who?who.name.split(' ')[0]:'La otra persona')}</div></div>
+        <b>${money(r.total)}</b></div>`;
+    }).join('') || '<div class="muted">Aún no tienes periodos.</div>';
+  }
+  $('#perCreate').onclick = () => {
+    const name = $('#perName').value.trim() || 'Periodo compartido';
+    let from = $('#perFrom').value || today(), to = $('#perTo').value || from;
+    if(to<from) [from,to] = [to,from];
+    const p = { id:'p'+uid(), name, from, to, partner: split.sel[0] || (contacts[0]||{}).id || '', mode:'equal', myPct:50, excl:[], theirs:[], settled:false };
+    periods.push(p); persistP(); $('#perName').value = '';
+    openPer = p.id; renderPeriodos(); window.scrollTo(0,0);
+  };
+  $('#perItems').onclick = ev => { const it = ev.target.closest('[data-open]'); if(it){ openPer = it.dataset.open; renderPeriodos(); window.scrollTo(0,0); } };
+  $('#perBack').onclick = () => { openPer = null; renderPeriodos(); };
+
+  function renderPeriodo(){
+    const p = perOf(); if(!p){ openPer = null; return renderPeriodos(); }
+    $('#pdName').value = p.name; $('#pdFrom').value = p.from; $('#pdTo').value = p.to;
+    $('#pdWho').innerHTML = contacts.length
+      ? [...contacts].sort((a,b)=>a.name.localeCompare(b.name,'es')).map(c => `<button type="button" class="chip ${c.id===p.partner?'on':''}" data-pw="${c.id}">${esc(c.name)}</button>`).join('')
+      : '<span class="muted">Agrega a la persona en Contactos para poder enviarle el cobro.</span>';
+    document.querySelectorAll('#pdMode button').forEach(b => b.classList.toggle('on', b.dataset.m===p.mode));
+    $('#pdPctBox').classList.toggle('hide', p.mode!=='pct');
+    $('#pdPct').value = p.myPct;
+    if(!$('#ptDate').value || $('#ptDate').value<p.from || $('#ptDate').value>p.to) $('#ptDate').value = p.from;
+    renderPeriodoCalc();
+  }
+  function renderPeriodoCalc(){
+    const p = perOf(); if(!p) return;
+    const who = partnerOf(p), name = who ? who.name.split(' ')[0] : 'La otra persona';
+    const inRange = expenses.filter(e => e.date>=p.from && e.date<=p.to).sort((a,b)=>a.date.localeCompare(b.date));
+    const r = calcPeriod(p, expenses);
+    $('#pdPctMe').textContent = `Yo ${r.pct}%`; $('#pdPctThem').textContent = `${name} ${100-r.pct}%`;
+    document.querySelectorAll('#pdPctPre .chip').forEach(b => b.classList.toggle('on', p.mode==='pct' && +b.dataset.p===r.pct));
+    $('#pdMine').innerHTML = inRange.map(e => {
+      const on = !(p.excl||[]).includes(e.id);
+      return `<label class="chk ${on?'':'off'}"><input type="checkbox" data-ex="${e.id}" ${on?'checked':''}>
+        <span class="l"><b>${esc(e.note||e.cat)}</b><span class="muted">${fmtD(e.date)} · ${CATS[e.cat]||'📦'} ${esc(e.cat)}</span></span><b>${money(e.amount)}</b></label>`;
+    }).join('') || '<div class="muted">No tienes gastos entre esas fechas.</div>';
+    $('#pdTheirsTitle').textContent = `Lo que pagó ${name}`;
+    $('#pdTheirs').innerHTML = r.theirs.map(t => `<div class="item"><div class="l"><b>${esc(t.note||'Gasto')}</b><span class="muted">${fmtD(t.date)}</span></div>
+      <div style="display:flex;align-items:center;gap:4px"><b>${money(parseAmount(t.amount))}</b><button class="del" data-rt="${t.id}" aria-label="Quitar">×</button></div></div>`).join('')
+      || `<div class="muted">Anota aquí lo que pagó ${esc(name)}.</div>`;
+    $('#pdResult').innerHTML = `
+      <div class="sum"><span>Total del periodo</span><b>${money(r.total)}</b></div>
+      <div class="sum muted"><span>Pagaste tú</span><span>${money(r.paidMe)}</span></div>
+      <div class="sum muted"><span>Pagó ${esc(name)}</span><span>${money(r.paidThem)}</span></div>
+      <div class="sum" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Te corresponde (${r.pct}%)</span><b>${money(r.myShare)}</b></div>
+      <div class="sum"><span>Le corresponde a ${esc(name)} (${100-r.pct}%)</span><b>${money(r.theirShare)}</b></div>
+      <div class="check ${p.settled?'ok':r.balance?'':'ok'}">${p.settled?'Saldado ✓':balanceText(r, name)}</div>`;
+    const canSend = who && r.balance!==0 && !p.settled;
+    $('#pdSend').innerHTML = canSend ? `<button class="small" data-psend="wa" style="flex:1">WhatsApp</button><button class="small ghost" data-psend="sms" style="flex:1">Mensaje</button>` : '';
+    $('#pdSettle').textContent = p.settled ? 'Marcar como pendiente' : 'Marcar como saldado';
+  }
+  function periodMsg(p){
+    const r = calcPeriod(p, expenses), who = partnerOf(p), first = who.name.split(' ')[0];
+    let t = `Hola ${first} 👋\n${p.name} (${fmtD(p.from)} al ${fmtD(p.to)})\n\n`;
+    t += `Total: ${money(r.total)}` + (r.pct!==50 ? ` · dividido ${r.pct}% / ${100-r.pct}%` : ' · partes iguales') + `\n`;
+    t += `Pagué yo: ${money(r.paidMe)} · Pagaste tú: ${money(r.paidThem)}\n`;
+    t += `Tu parte: ${money(r.theirShare)}\n\n`;
+    t += r.balance>0 ? `Me debes: *${money(r.balance)}*` : `Te debo: *${money(-r.balance)}*`;
+    if(r.mine.length) t += `\n\nDetalle de lo que pagué:\n` + r.mine.map(e => `• ${fmtD(e.date)} ${e.note||e.cat}: ${money(e.amount)}`).join('\n');
+    if(r.balance>0 && banco.trim()) t += `\n\nDatos para transferir:\n${banco.trim()}`;
+    return t;
+  }
+  const updPer = (f) => { const p = perOf(); if(!p) return; f(p); persistP(); };
+  $('#pdName').oninput = e => updPer(p => p.name = e.target.value);
+  $('#pdFrom').onchange = e => { updPer(p => { p.from = e.target.value || p.from; if(p.to<p.from) p.to = p.from; }); renderPeriodo(); };
+  $('#pdTo').onchange = e => { updPer(p => { p.to = e.target.value || p.to; if(p.to<p.from) p.from = p.to; }); renderPeriodo(); };
+  $('#pdWho').onclick = ev => { const b = ev.target.closest('[data-pw]'); if(b){ updPer(p => p.partner = b.dataset.pw); renderPeriodo(); } };
+  $('#pdMode').onclick = ev => { const b = ev.target.closest('button'); if(b){ updPer(p => p.mode = b.dataset.m); renderPeriodo(); } };
+  $('#pdPct').oninput = e => { updPer(p => p.myPct = +e.target.value); renderPeriodoCalc(); };
+  $('#pdPctPre').onclick = ev => { const b = ev.target.closest('[data-p]'); if(b){ updPer(p => p.myPct = +b.dataset.p); $('#pdPct').value = b.dataset.p; renderPeriodoCalc(); } };
+  $('#pdMine').onchange = ev => {
+    const id = ev.target.dataset.ex; if(id===undefined) return;
+    updPer(p => { p.excl = p.excl || []; p.excl = ev.target.checked ? p.excl.filter(x=>x!==id) : p.excl.concat(id); });
+    renderPeriodoCalc();
+  };
+  $('#ptAdd').onclick = () => {
+    const amount = parseAmount($('#ptAmount').value); if(!(amount>0)){ $('#ptAmount').focus(); return; }
+    updPer(p => p.theirs.push({ id:uid(), amount, note:$('#ptNote').value.trim(), date:$('#ptDate').value || p.from }));
+    $('#ptAmount').value = ''; $('#ptNote').value = ''; renderPeriodoCalc();
+  };
+  $('#pdTheirs').onclick = ev => { const b = ev.target.closest('[data-rt]'); if(b){ updPer(p => p.theirs = p.theirs.filter(t => t.id!==b.dataset.rt)); renderPeriodoCalc(); } };
+  $('#pdSend').onclick = ev => {
+    const b = ev.target.closest('[data-psend]'), p = perOf(); if(!b || !p) return;
+    const who = partnerOf(p), text = periodMsg(p);
+    if(b.dataset.psend==='wa') window.open(`https://wa.me/${who.phone}?text=${encodeURIComponent(text)}`, '_blank');
+    else location.href = `sms:${who.phone ? '+'+who.phone : ''}&body=${encodeURIComponent(text)}`;
+  };
+  $('#pdSettle').onclick = () => { updPer(p => p.settled = !p.settled); renderPeriodoCalc(); };
+  $('#pdDelete').onclick = () => {
+    const p = perOf(); if(!p || !confirm(`¿Eliminar el periodo “${p.name}”? Tus gastos no se borran.`)) return;
+    periods = periods.filter(x => x.id!==p.id); persistP(); openPer = null; renderPeriodos();
   };
 
   /* ---------- Inicio ---------- */
