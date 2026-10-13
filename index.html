@@ -29,7 +29,8 @@ h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:600;text-transf
 label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font-size:16px;font-family:inherit}
 textarea{min-height:64px;resize:vertical}
-.row{display:flex;gap:10px}.row>*{flex:1}
+.row{display:flex;gap:10px}.row>*{flex:1;min-width:0}
+input[type=date]{min-width:0;-webkit-appearance:none;appearance:none}
 button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 14px;background:var(--accent);color:var(--accent-ink);width:100%;margin-top:12px}
 button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
 button.small{width:auto;margin:0;padding:8px 12px;font-size:14px}
@@ -45,7 +46,8 @@ button.small{width:auto;margin:0;padding:8px 12px;font-size:14px}
 .seg button{margin:0;background:transparent;color:var(--muted);padding:9px}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-nav button{margin:0;border-radius:0;background:transparent;color:var(--muted);padding:14px 4px;font-size:14px}
+nav button{margin:0;border-radius:0;background:transparent;color:var(--muted);padding:8px 2px 10px;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px;white-space:nowrap}
+nav button span{font-size:20px;line-height:1}
 nav button.on{color:var(--accent)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .chip{width:auto;margin:0;padding:8px 12px;font-size:14px;font-weight:500;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:999px}
@@ -77,6 +79,13 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
 .check{padding:10px 12px;border-radius:10px;margin-top:10px;font-size:14px;border:1px solid var(--line)}
 .check.ok{color:var(--ok);border-color:var(--ok)}
 .check.bad{color:var(--danger);border-color:var(--danger)}
+.chk{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.chk:first-child{border-top:0}
+.chk input{width:22px;height:22px;flex:0 0 22px;accent-color:var(--accent)}
+.chk .l{flex:1;min-width:0}.chk .l b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.chk.off .l{opacity:.45;text-decoration:line-through}
+input[type=range]{padding:0;border:0;background:none;accent-color:var(--accent)}
+.sum{display:flex;justify-content:space-between;padding:4px 0}
 </style>
 </head>
 <body>
@@ -256,6 +265,85 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
     </div>
   </section>
 
+  <!-- ================= PERIODOS ================= -->
+  <section id="tab-periodos" class="hide">
+    <div id="perList">
+      <h1>Periodos compartidos</h1>
+      <div class="card">
+        <h2>Nuevo periodo</h2>
+        <div class="muted">Por ejemplo unas vacaciones: se suman tus gastos entre esas fechas y lo que pagó la otra persona, y se divide.</div>
+        <label>Nombre</label>
+        <input id="perName" type="text" placeholder="Ej: Vacaciones en La Serena">
+        <div class="row">
+          <div><label>Desde</label><input id="perFrom" type="date"></div>
+          <div><label>Hasta</label><input id="perTo" type="date"></div>
+        </div>
+        <button id="perCreate">Crear periodo</button>
+      </div>
+      <div class="card">
+        <h2>Mis periodos</h2>
+        <div id="perItems"></div>
+      </div>
+    </div>
+
+    <div id="perDetail" class="hide">
+      <div class="monthnav" style="margin:4px 0 10px"><button class="ghost small" id="perBack">‹ Periodos</button><span></span></div>
+      <div class="card">
+        <label>Nombre</label>
+        <input id="pdName" type="text">
+        <div class="row">
+          <div><label>Desde</label><input id="pdFrom" type="date"></div>
+          <div><label>Hasta</label><input id="pdTo" type="date"></div>
+        </div>
+        <label>Con quién</label>
+        <div class="chips" id="pdWho"></div>
+      </div>
+
+      <div class="card">
+        <h2>Cómo dividir</h2>
+        <div class="seg" id="pdMode">
+          <button data-m="equal">Partes iguales</button>
+          <button data-m="pct">Por porcentaje</button>
+        </div>
+        <div id="pdPctBox" class="hide">
+          <div class="sum" style="margin-top:12px"><b id="pdPctMe">Yo 50%</b><b id="pdPctThem">50%</b></div>
+          <input id="pdPct" type="range" min="0" max="100" step="5" value="50">
+          <div class="chips" id="pdPctPre">
+            <button type="button" class="chip" data-p="50">50 / 50</button>
+            <button type="button" class="chip" data-p="60">60 / 40</button>
+            <button type="button" class="chip" data-p="70">70 / 30</button>
+            <button type="button" class="chip" data-p="80">80 / 20</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Lo que pagué yo</h2>
+        <div class="muted" style="margin-bottom:4px">Tus gastos entre esas fechas. Desmarca los que no son compartidos.</div>
+        <div id="pdMine"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="pdTheirsTitle">Lo que pagó la otra persona</h2>
+        <div id="pdTheirs"></div>
+        <div class="row" style="margin-top:8px">
+          <input id="ptAmount" type="number" inputmode="numeric" placeholder="Monto">
+          <input id="ptDate" type="date">
+        </div>
+        <input id="ptNote" type="text" placeholder="Ej: Bencina" style="margin-top:8px">
+        <button class="ghost" id="ptAdd">+ Agregar</button>
+      </div>
+
+      <div class="card">
+        <h2>Resultado</h2>
+        <div id="pdResult"></div>
+        <div class="btns" id="pdSend" style="margin-top:10px;justify-content:stretch"></div>
+        <button class="ghost" id="pdSettle">Marcar como saldado</button>
+        <button class="ghost" id="pdDelete" style="color:var(--danger)">Eliminar periodo</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ================= CONTACTOS ================= -->
   <section id="tab-contactos" class="hide">
     <h1>Contactos</h1>
@@ -276,9 +364,10 @@ code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-
 </main>
 
 <nav>
-  <button id="nav-gastos" class="on">💰 Gastos</button>
-  <button id="nav-dividir">🧾 Dividir</button>
-  <button id="nav-contactos">👥 Contactos</button>
+  <button id="nav-gastos" class="on"><span>💰</span>Gastos</button>
+  <button id="nav-dividir"><span>🧾</span>Dividir</button>
+  <button id="nav-periodos"><span>🏖️</span>Periodos</button>
+  <button id="nav-contactos"><span>👥</span>Contactos</button>
 </nav>
 
 <script>
@@ -474,6 +563,18 @@ function parseBankMail(txt){
   return out;
 }
 function bankKey(r){ return `bch|${r.date} ${r.time||''}|${r.amount}|${r.card||''}`; }
+/* ---- Periodos compartidos (vacaciones, etc.) ---- */
+function calcPeriod(p, list){
+  const excl = p.excl || [];
+  const mine = (list||[]).filter(e => p.from && p.to && e.date>=p.from && e.date<=p.to && !excl.includes(e.id));
+  const theirs = p.theirs || [];
+  const paidMe = mine.reduce((a,e)=>a+(e.amount||0),0);
+  const paidThem = theirs.reduce((a,e)=>a+(parseAmount(e.amount)||0),0);
+  const total = paidMe + paidThem;
+  const pct = p.mode==='pct' ? Math.min(100, Math.max(0, parseFloat(p.myPct)||0)) : 50;
+  const myShare = Math.round(total*pct/100), theirShare = total - myShare;
+  return { mine, theirs, paidMe, paidThem, total, pct, myShare, theirShare, balance: paidMe - myShare };  // balance > 0: la otra persona me debe
+}
 /*PURE-END*/
 
   const $ = s => document.querySelector(s);
@@ -498,18 +599,22 @@ function bankKey(r){ return `bch|${r.date} ${r.time||''}|${r.amount}|${r.card||'
   const persistE = () => save('expenses', expenses);
   const persistC = () => save('contacts', contacts);
   const persistS = () => save('split', split);
+  let periods = load('periods', []);
+  let openPer = null;
+  const persistP = () => save('periods', periods);
 
   /* ---------- Pestañas ---------- */
   function tab(t){
-    ['gastos','dividir','contactos'].forEach(x => {
+    ['gastos','dividir','periodos','contactos'].forEach(x => {
       $('#tab-'+x).classList.toggle('hide', x!==t);
       $('#nav-'+x).classList.toggle('on', x===t);
     });
     if(t==='dividir') renderDividir();
     if(t==='contactos') renderContactos();
+    if(t==='periodos') renderPeriodos();
     window.scrollTo(0,0);
   }
-  ['gastos','dividir','contactos'].forEach(x => $('#nav-'+x).onclick = () => tab(x));
+  ['gastos','dividir','periodos','contactos'].forEach(x => $('#nav-'+x).onclick = () => tab(x));
 
   /* ================= MIS GASTOS ================= */
   function renderChips(){
@@ -966,6 +1071,120 @@ function bankKey(r){ return `bch|${r.date} ${r.time||''}|${r.amount}|${r.card||'
   $('#resetSplit').onclick = () => {
     if(!confirm('¿Empezar una cuenta nueva? Se mantienen las personas seleccionadas.')) return;
     split.concept=''; split.total=''; split.amounts={}; split.paid={}; split.items=[]; split.boletaTotal=''; persistS(); renderDividir();
+  };
+
+  /* ================= PERIODOS ================= */
+  const fmtD = d => d ? d.split('-').reverse().join('/') : '';
+  const perOf = () => periods.find(x => x.id===openPer);
+  const partnerOf = p => contacts.find(c => c.id===p.partner);
+  const balanceText = (r, name) => r.balance>0 ? `${esc(name)} te debe <b>${money(r.balance)}</b>`
+    : r.balance<0 ? `Le debes <b>${money(-r.balance)}</b> a ${esc(name)}` : 'Están a mano';
+
+  function renderPeriodos(){
+    $('#perList').classList.toggle('hide', !!openPer);
+    $('#perDetail').classList.toggle('hide', !openPer);
+    if(openPer) return renderPeriodo();
+    if(!$('#perFrom').value) $('#perFrom').value = today();
+    if(!$('#perTo').value) $('#perTo').value = today();
+    const list = [...periods].sort((a,b)=>b.from.localeCompare(a.from));
+    $('#perItems').innerHTML = list.map(p => {
+      const r = calcPeriod(p, expenses), who = partnerOf(p);
+      return `<div class="item" data-open="${p.id}" style="cursor:pointer"><div class="l"><b>${esc(p.name)}</b>
+        <span class="muted">${fmtD(p.from)} al ${fmtD(p.to)}${who?' · con '+esc(who.name):''}</span>
+        <div class="${p.settled?'paid':'muted'}" style="font-size:14px">${p.settled?'Saldado ✓':balanceText(r, who?who.name.split(' ')[0]:'La otra persona')}</div></div>
+        <b>${money(r.total)}</b></div>`;
+    }).join('') || '<div class="muted">Aún no tienes periodos.</div>';
+  }
+  $('#perCreate').onclick = () => {
+    const name = $('#perName').value.trim() || 'Periodo compartido';
+    let from = $('#perFrom').value || today(), to = $('#perTo').value || from;
+    if(to<from) [from,to] = [to,from];
+    const p = { id:'p'+uid(), name, from, to, partner: split.sel[0] || (contacts[0]||{}).id || '', mode:'equal', myPct:50, excl:[], theirs:[], settled:false };
+    periods.push(p); persistP(); $('#perName').value = '';
+    openPer = p.id; renderPeriodos(); window.scrollTo(0,0);
+  };
+  $('#perItems').onclick = ev => { const it = ev.target.closest('[data-open]'); if(it){ openPer = it.dataset.open; renderPeriodos(); window.scrollTo(0,0); } };
+  $('#perBack').onclick = () => { openPer = null; renderPeriodos(); };
+
+  function renderPeriodo(){
+    const p = perOf(); if(!p){ openPer = null; return renderPeriodos(); }
+    $('#pdName').value = p.name; $('#pdFrom').value = p.from; $('#pdTo').value = p.to;
+    $('#pdWho').innerHTML = contacts.length
+      ? [...contacts].sort((a,b)=>a.name.localeCompare(b.name,'es')).map(c => `<button type="button" class="chip ${c.id===p.partner?'on':''}" data-pw="${c.id}">${esc(c.name)}</button>`).join('')
+      : '<span class="muted">Agrega a la persona en Contactos para poder enviarle el cobro.</span>';
+    document.querySelectorAll('#pdMode button').forEach(b => b.classList.toggle('on', b.dataset.m===p.mode));
+    $('#pdPctBox').classList.toggle('hide', p.mode!=='pct');
+    $('#pdPct').value = p.myPct;
+    if(!$('#ptDate').value || $('#ptDate').value<p.from || $('#ptDate').value>p.to) $('#ptDate').value = p.from;
+    renderPeriodoCalc();
+  }
+  function renderPeriodoCalc(){
+    const p = perOf(); if(!p) return;
+    const who = partnerOf(p), name = who ? who.name.split(' ')[0] : 'La otra persona';
+    const inRange = expenses.filter(e => e.date>=p.from && e.date<=p.to).sort((a,b)=>a.date.localeCompare(b.date));
+    const r = calcPeriod(p, expenses);
+    $('#pdPctMe').textContent = `Yo ${r.pct}%`; $('#pdPctThem').textContent = `${name} ${100-r.pct}%`;
+    document.querySelectorAll('#pdPctPre .chip').forEach(b => b.classList.toggle('on', p.mode==='pct' && +b.dataset.p===r.pct));
+    $('#pdMine').innerHTML = inRange.map(e => {
+      const on = !(p.excl||[]).includes(e.id);
+      return `<label class="chk ${on?'':'off'}"><input type="checkbox" data-ex="${e.id}" ${on?'checked':''}>
+        <span class="l"><b>${esc(e.note||e.cat)}</b><span class="muted">${fmtD(e.date)} · ${CATS[e.cat]||'📦'} ${esc(e.cat)}</span></span><b>${money(e.amount)}</b></label>`;
+    }).join('') || '<div class="muted">No tienes gastos entre esas fechas.</div>';
+    $('#pdTheirsTitle').textContent = `Lo que pagó ${name}`;
+    $('#pdTheirs').innerHTML = r.theirs.map(t => `<div class="item"><div class="l"><b>${esc(t.note||'Gasto')}</b><span class="muted">${fmtD(t.date)}</span></div>
+      <div style="display:flex;align-items:center;gap:4px"><b>${money(parseAmount(t.amount))}</b><button class="del" data-rt="${t.id}" aria-label="Quitar">×</button></div></div>`).join('')
+      || `<div class="muted">Anota aquí lo que pagó ${esc(name)}.</div>`;
+    $('#pdResult').innerHTML = `
+      <div class="sum"><span>Total del periodo</span><b>${money(r.total)}</b></div>
+      <div class="sum muted"><span>Pagaste tú</span><span>${money(r.paidMe)}</span></div>
+      <div class="sum muted"><span>Pagó ${esc(name)}</span><span>${money(r.paidThem)}</span></div>
+      <div class="sum" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Te corresponde (${r.pct}%)</span><b>${money(r.myShare)}</b></div>
+      <div class="sum"><span>Le corresponde a ${esc(name)} (${100-r.pct}%)</span><b>${money(r.theirShare)}</b></div>
+      <div class="check ${p.settled?'ok':r.balance?'':'ok'}">${p.settled?'Saldado ✓':balanceText(r, name)}</div>`;
+    const canSend = who && r.balance!==0 && !p.settled;
+    $('#pdSend').innerHTML = canSend ? `<button class="small" data-psend="wa" style="flex:1">WhatsApp</button><button class="small ghost" data-psend="sms" style="flex:1">Mensaje</button>` : '';
+    $('#pdSettle').textContent = p.settled ? 'Marcar como pendiente' : 'Marcar como saldado';
+  }
+  function periodMsg(p){
+    const r = calcPeriod(p, expenses), who = partnerOf(p), first = who.name.split(' ')[0];
+    let t = `Hola ${first} 👋\n${p.name} (${fmtD(p.from)} al ${fmtD(p.to)})\n\n`;
+    t += `Total: ${money(r.total)}` + (r.pct!==50 ? ` · dividido ${r.pct}% / ${100-r.pct}%` : ' · partes iguales') + `\n`;
+    t += `Pagué yo: ${money(r.paidMe)} · Pagaste tú: ${money(r.paidThem)}\n`;
+    t += `Tu parte: ${money(r.theirShare)}\n\n`;
+    t += r.balance>0 ? `Me debes: *${money(r.balance)}*` : `Te debo: *${money(-r.balance)}*`;
+    if(r.mine.length) t += `\n\nDetalle de lo que pagué:\n` + r.mine.map(e => `• ${fmtD(e.date)} ${e.note||e.cat}: ${money(e.amount)}`).join('\n');
+    if(r.balance>0 && banco.trim()) t += `\n\nDatos para transferir:\n${banco.trim()}`;
+    return t;
+  }
+  const updPer = (f) => { const p = perOf(); if(!p) return; f(p); persistP(); };
+  $('#pdName').oninput = e => updPer(p => p.name = e.target.value);
+  $('#pdFrom').onchange = e => { updPer(p => { p.from = e.target.value || p.from; if(p.to<p.from) p.to = p.from; }); renderPeriodo(); };
+  $('#pdTo').onchange = e => { updPer(p => { p.to = e.target.value || p.to; if(p.to<p.from) p.from = p.to; }); renderPeriodo(); };
+  $('#pdWho').onclick = ev => { const b = ev.target.closest('[data-pw]'); if(b){ updPer(p => p.partner = b.dataset.pw); renderPeriodo(); } };
+  $('#pdMode').onclick = ev => { const b = ev.target.closest('button'); if(b){ updPer(p => p.mode = b.dataset.m); renderPeriodo(); } };
+  $('#pdPct').oninput = e => { updPer(p => p.myPct = +e.target.value); renderPeriodoCalc(); };
+  $('#pdPctPre').onclick = ev => { const b = ev.target.closest('[data-p]'); if(b){ updPer(p => p.myPct = +b.dataset.p); $('#pdPct').value = b.dataset.p; renderPeriodoCalc(); } };
+  $('#pdMine').onchange = ev => {
+    const id = ev.target.dataset.ex; if(id===undefined) return;
+    updPer(p => { p.excl = p.excl || []; p.excl = ev.target.checked ? p.excl.filter(x=>x!==id) : p.excl.concat(id); });
+    renderPeriodoCalc();
+  };
+  $('#ptAdd').onclick = () => {
+    const amount = parseAmount($('#ptAmount').value); if(!(amount>0)){ $('#ptAmount').focus(); return; }
+    updPer(p => p.theirs.push({ id:uid(), amount, note:$('#ptNote').value.trim(), date:$('#ptDate').value || p.from }));
+    $('#ptAmount').value = ''; $('#ptNote').value = ''; renderPeriodoCalc();
+  };
+  $('#pdTheirs').onclick = ev => { const b = ev.target.closest('[data-rt]'); if(b){ updPer(p => p.theirs = p.theirs.filter(t => t.id!==b.dataset.rt)); renderPeriodoCalc(); } };
+  $('#pdSend').onclick = ev => {
+    const b = ev.target.closest('[data-psend]'), p = perOf(); if(!b || !p) return;
+    const who = partnerOf(p), text = periodMsg(p);
+    if(b.dataset.psend==='wa') window.open(`https://wa.me/${who.phone}?text=${encodeURIComponent(text)}`, '_blank');
+    else location.href = `sms:${who.phone ? '+'+who.phone : ''}&body=${encodeURIComponent(text)}`;
+  };
+  $('#pdSettle').onclick = () => { updPer(p => p.settled = !p.settled); renderPeriodoCalc(); };
+  $('#pdDelete').onclick = () => {
+    const p = perOf(); if(!p || !confirm(`¿Eliminar el periodo “${p.name}”? Tus gastos no se borran.`)) return;
+    periods = periods.filter(x => x.id!==p.id); persistP(); openPer = null; renderPeriodos();
   };
 
   /* ---------- Inicio ---------- */
