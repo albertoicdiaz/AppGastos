@@ -117,7 +117,7 @@ input[type=range]{padding:0;border:0;background:none;accent-color:var(--accent)}
     <div class="card hide" id="revCard">
       <div class="row" style="align-items:center;justify-content:space-between"><h2 style="margin:0">Por revisar</h2>
         <button class="small ghost" id="revAll" style="flex:0 0 auto">Confirmar todos</button></div>
-      <div class="muted" style="margin-top:6px">Movimientos importados. Revisa la categoría y confirma, o elimina los repetidos.</div>
+      <div class="muted" style="margin-top:6px">Movimientos importados. Cuéntame a qué se debió cada uno y de qué grupo es. Si lo compartiste, marca “Gasto compartido”: solo tu parte queda en la categoría.</div>
       <div id="revList" style="margin-top:6px"></div>
     </div>
 
@@ -146,8 +146,29 @@ input[type=range]{padding:0;border:0;background:none;accent-color:var(--accent)}
         <p class="muted">Formato por línea: <code>2026-10-09;12500;Starbucks</code> (también vale <code>12500;Starbucks</code>).</p>
         <input type="file" id="impFile" accept=".txt,.csv,text/plain">
         <label>…o pega las líneas aquí</label>
-        <textarea id="impText" placeholder="2026-10-09;12500;Starbucks"></textarea>
+        <textarea id="impText" placeholder="2026-10-09;12500;Starbucks  (o el texto de un correo de compra del banco)"></textarea>
         <button id="impBtn" class="ghost">Importar texto pegado</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <details id="correoBox">
+        <summary>📧 Compras con tarjeta (correos de Banco de Chile)</summary>
+        <p class="muted">Cada aviso “Te informamos que se ha realizado una compra…” del banco entra a <b>Por revisar</b>, donde te pregunto a qué se debió. No hace falta reenviar correos: un pequeño script de Google lee esos avisos en tu propio Gmail y la app los trae al abrirla.</p>
+        <ol class="muted">
+          <li>En el computador abre <b>script.google.com</b> → <b>Nuevo proyecto</b> y pega el código de <code>integraciones/correo-bancochile.gs</code> (está en el repositorio). Cambia <code>CAMBIA-ESTA-CLAVE</code> por una clave tuya.</li>
+          <li>Ejecuta la función <b>probar</b> una vez y acepta los permisos de Gmail.</li>
+          <li><b>Implementar</b> → <b>Nueva implementación</b> → tipo <b>Aplicación web</b>, ejecutar como <b>Yo</b>, acceso <b>Cualquier usuario</b>. Copia la URL.</li>
+          <li>Pega aquí la URL agregándole <code>?token=</code> y tu clave.</li>
+        </ol>
+        <label>URL del script (con ?token=…)</label>
+        <input id="correoUrl" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec?token=…">
+        <div class="row" style="margin-top:8px">
+          <button class="small" id="correoSave">Guardar</button>
+          <button class="small ghost" id="correoSync">Traer compras ahora</button>
+        </div>
+        <div class="muted" id="correoInfo" style="margin-top:6px"></div>
+        <p class="muted">Sin script también funciona: copia el texto del correo y pégalo en el cuadro de importar de arriba.</p>
       </details>
     </div>
 
@@ -418,7 +439,7 @@ function findDupes(list){
   const out = {};
   list.forEach(e => {
     if(e.rev!==false) return;
-    const o = list.find(x => x.id!==e.id && x.amount===e.amount && Math.abs(dayNum(x.date)-dayNum(e.date))<=2 && (x.rev!==false || String(x.id)<String(e.id)));
+    const o = list.find(x => x.id!==e.id && (x.total ?? x.amount)===(e.total ?? e.amount) && Math.abs(dayNum(x.date)-dayNum(e.date))<=2 && (x.rev!==false || String(x.id)<String(e.id)));
     if(o) out[e.id] = o.id;
   });
   return out;
@@ -525,10 +546,48 @@ function receiptFromApi(resp){
   }).filter(it => it.name && it.unit>0);
   return { items, subtotal:int(d.subtotal), propina:int(d.propina), total:int(d.total), totalTip:int(d.total_con_propina) };
 }
+/* ---- Avisos de compra de Banco de Chile (correo) ---- */
+// "Te informamos que se ha realizado una compra por $1.000 con Tarjeta de Crédito ****1284 en EXPRESS VALDIVIA CTO el 11/10/2026 19:08."
+const BANK_RE = /compra por \$\s?([\d.,]+) con Tarjeta de (Cr[eé]dito|D[eé]bito) \*+(\d{4}) en (.+?) el (\d{1,2}\/\d{1,2}\/\d{4})(?: (\d{1,2}:\d{2}))?/gi;
+function parseBankMail(txt){
+  const flat = String(txt||'').replace(/^[ \t]*(>[ \t]?)+/gm,'')            // citas ">" de correos reenviados
+    .replace(/<[^>]+>/g,' ').replace(/&nbsp;|\xa0/g,' ').replace(/&([aeiou])acute;/gi,'$1').replace(/&#42;/g,'*').replace(/\s+/g,' ');
+  const out = [];
+  for(const m of flat.matchAll(BANK_RE)){
+    const amount = parseAmount(m[1]), date = normDate(m[5], '');
+    if(!(amount>0) || !date) continue;
+    const r = { date, time: m[6] ? m[6].padStart(5,'0') : '', amount, card: m[3], tipo: /^d/i.test(m[2]) ? 'debito' : 'credito', merchant: m[4].trim() };
+    r.key = bankKey(r);
+    if(!out.some(o => o.key===r.key)) out.push(r);     // el mismo aviso citado dos veces (reenvíos)
+  }
+  return out;
+}
+function bankKey(r){ return `bch|${r.date} ${r.time||''}|${r.amount}|${r.card||''}`; }
+/* ---- Gasto compartido: solo mi parte queda como gasto ---- */
+function calcShare(total, n, mode, myPct){
+  // n = cuántas personas comparten conmigo. 'equal': partes iguales (yo absorbo el peso que sobra); 'pct': mi % y el resto en partes iguales
+  total = Math.max(0, Math.round(Number(total)||0)); n = Math.max(0, Math.floor(n||0));
+  if(!n) return { mine: total, others: [], pct: 100 };
+  const pct = mode==='pct' ? Math.min(100, Math.max(0, Number(myPct)||0)) : 100/(n+1);
+  const mine = mode==='pct' ? Math.round(total*pct/100) : total - Math.floor(total/(n+1))*n;
+  const rest = total - mine, each = Math.floor(rest/n), extra = rest - each*n;
+  return { mine, others: Array.from({length:n}, (_,i) => each + (i<extra?1:0)), pct };
+}
+function applyShare(e){
+  // e.total = monto cobrado en la tarjeta; e.amount = mi parte (lo que cuenta en la torta y en el mes)
+  if(!e.shared){ if(e.total!=null){ e.amount = e.total; delete e.total; } return e; }
+  if(e.total==null) e.total = e.amount;
+  const sh = e.shared; sh.with = sh.with || []; sh.paid = sh.paid || {};
+  const r = calcShare(e.total, sh.with.length, sh.mode, sh.myPct);
+  e.amount = r.mine; sh.parts = {};
+  sh.with.forEach((id,i) => sh.parts[id] = r.others[i]);
+  Object.keys(sh.paid).forEach(id => { if(!(id in sh.parts)) delete sh.paid[id]; });
+  return e;
+}
 /* ---- Periodos compartidos (vacaciones, etc.) ---- */
 function calcPeriod(p, list){
   const excl = p.excl || [];
-  const mine = (list||[]).filter(e => p.from && p.to && e.date>=p.from && e.date<=p.to && !excl.includes(e.id));
+  const mine = (list||[]).filter(e => p.from && p.to && e.date>=p.from && e.date<=p.to && !excl.includes(e.id) && !e.shared);  // los ya compartidos no se dividen otra vez
   const theirs = p.theirs || [];
   const paidMe = mine.reduce((a,e)=>a+(e.amount||0),0);
   const paidThem = theirs.reduce((a,e)=>a+(parseAmount(e.amount)||0),0);
@@ -607,11 +666,28 @@ function calcPeriod(p, list){
 
     const sorted = [...mes].sort((a,b)=> b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
     $('#lista').innerHTML = sorted.map(e =>
-      `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>
+      `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>${e.why?`<span>${esc(e.why)}</span>`:''}
          <span class="muted">${e.date.split('-').reverse().join('/')}${e.rev===false?' <span class="tag">por revisar</span>':''}</span>
+         ${e.shared&&e.shared.with.length?sharedLine(e):''}
          <select class="catsel" data-id="${e.id}">${Object.keys(CATS).map(c=>`<option value="${c}" ${c===e.cat?'selected':''}>${CATS[c]} ${c}</option>`).join('')}</select></div>
-       <div style="display:flex;align-items:center;gap:4px"><b>${money(e.amount)}</b><button class="del" data-id="${e.id}" aria-label="Eliminar">×</button></div></div>`
+       <div style="display:flex;align-items:center;gap:4px"><span style="text-align:right"><b>${money(e.amount)}</b>${e.shared?`<br><span class="muted" style="font-size:12px">de ${money(e.total)}</span>`:''}</span><button class="del" data-id="${e.id}" aria-label="Eliminar">×</button></div></div>`
     ).join('') || '<div class="muted">Sin movimientos.</div>';
+  }
+  function sharedLine(e){
+    const sh = e.shared;
+    return `<div style="font-size:13px">👥 ${sh.mode==='pct'?`Yo ${sh.myPct}%`:'Partes iguales'} · ` + sh.with.map(cid => {
+      const c = contacts.find(x => x.id===cid), nm = esc(firstName(c?c.name:'Persona')), paid = sh.paid && sh.paid[cid];
+      return paid ? `<span class="paid">${nm} pagó ✓</span>`
+        : `${nm} te debe ${money(sh.parts[cid])} <button type="button" class="small ghost" style="padding:2px 8px;font-size:12px" data-cobrar="${e.id}|${cid}">Cobrar</button>
+           <button type="button" class="small ghost" style="padding:2px 8px;font-size:12px" data-pago="${e.id}|${cid}">Pagó</button>`;
+    }).join(' · ') + '</div>';
+  }
+  function shareMsg(e, c){
+    const sh = e.shared;
+    let t = `Hola ${firstName(c.name)} 👋\n${e.why || e.note || e.cat} (${e.date.split('-').reverse().join('/')})\n`;
+    t += `Total: ${money(e.total)} · ${sh.mode==='pct' ? `yo ${sh.myPct}%` : 'partes iguales'}\nTu parte: ${money(sh.parts[c.id])}`;
+    if(banco.trim()) t += `\n\nDatos para transferir:\n${banco.trim()}`;
+    return t;
   }
 
   const COLORS = {Comida:'#f59e0b', Supermercado:'#10b981', Transporte:'#3b82f6', Hogar:'#8b5cf6', Ocio:'#ec4899', Salud:'#ef4444',
@@ -645,25 +721,77 @@ function calcPeriod(p, list){
     const dup = findDupes(expenses);
     $('#revList').innerHTML = pend.map(e => {
       const o = dup[e.id] && expenses.find(x => x.id===dup[e.id]);
-      return `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>
-        <span class="muted">${e.date.split('-').reverse().join('/')}${e.src?` <span class="tag">${esc(e.src)}</span>`:''}</span>
+      return `<div class="item" style="align-items:flex-start"><div class="l" style="flex:1"><b>${esc(e.note||e.cat)}</b>
+        <span class="muted">${e.date.split('-').reverse().join('/')}${e.time?' '+esc(e.time):''}${e.card?' · ****'+esc(e.card):''}${e.src?` <span class="tag">${esc(e.src)}</span>`:''}</span>
         ${o?`<div class="warn">⚠️ ¿Repetido? Igual a “${esc(o.note||o.cat)}” del ${o.date.split('-').reverse().join('/')}</div>`:''}
-        <select class="catsel" data-id="${e.id}">${Object.keys(CATS).map(c=>`<option value="${c}" ${c===e.cat?'selected':''}>${CATS[c]} ${c}</option>`).join('')}</select></div>
-        <div style="display:flex;align-items:center;gap:2px"><b>${money(e.amount)}</b>
-        <button class="del" style="color:var(--ok)" data-ok="${e.id}" aria-label="Confirmar">✓</button>
-        <button class="del" data-id="${e.id}" aria-label="Eliminar">×</button></div></div>`;
+        <input class="why" data-id="${e.id}" value="${esc(e.why||'')}" placeholder="¿A qué se debió?" style="margin:4px 0;padding:7px 10px">
+        <select class="catsel" data-id="${e.id}">${Object.keys(CATS).map(c=>`<option value="${c}" ${c===e.cat?'selected':''}>${CATS[c]} ${c}</option>`).join('')}</select>
+        <label class="chk" style="border:0;padding:6px 0 0"><input type="checkbox" class="shOn" data-id="${e.id}" ${e.shared?'checked':''}><span>Gasto compartido</span></label>
+        ${e.shared?shareBox(e):''}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><b>${money(e.amount)}</b>${e.shared?`<span class="muted" style="font-size:12px">de ${money(e.total)}</span>`:''}
+        <div style="display:flex"><button class="del" style="color:var(--ok)" data-ok="${e.id}" aria-label="Confirmar">✓</button>
+        <button class="del" data-id="${e.id}" aria-label="Eliminar">×</button></div></div></div>`;
     }).join('');
   }
+  const firstName = n => String(n||'').split(' ')[0];
+  function shareBox(e){
+    const sh = e.shared, id = e.id;
+    const people = [...contacts].sort((a,b)=>a.name.localeCompare(b.name,'es'));
+    const pct = sh.mode==='pct' ? (sh.myPct ?? 50) : null;
+    const lines = sh.with.map(cid => { const c = contacts.find(x => x.id===cid); return `<div class="sum muted"><span>${esc(c?c.name:'Persona')}</span><span>${money(sh.parts[cid])}</span></div>`; }).join('');
+    return `<div style="padding:6px 0 0 4px;border-left:3px solid var(--accent);padding-left:10px;margin-top:4px">
+      <div class="muted" style="font-size:13px">¿Con quién?</div>
+      <div class="chips" style="margin-top:4px">${people.map(c => `<button type="button" class="chip ${sh.with.includes(c.id)?'on':''}" data-shw="${c.id}" data-id="${id}">${esc(c.name)}</button>`).join('')}</div>
+      <div class="row" style="margin-top:6px;align-items:center"><input class="shNew" data-id="${id}" placeholder="Otra persona" style="padding:7px 10px">
+        <button type="button" class="small ghost" data-shadd="${id}" style="flex:0 0 auto">Agregar</button></div>
+      <div class="seg"><button type="button" class="${sh.mode!=='pct'?'on':''}" data-shm="equal" data-id="${id}">Partes iguales</button>
+        <button type="button" class="${sh.mode==='pct'?'on':''}" data-shm="pct" data-id="${id}">Por porcentaje</button></div>
+      ${pct!==null?`<div class="sum" style="margin-top:8px"><b>Yo ${pct}%</b><b>${sh.with.length>1?'Resto en partes iguales':(sh.with.length?firstName((contacts.find(c=>c.id===sh.with[0])||{}).name)+' ':'')+(100-pct)+'%'}</b></div>
+        <input class="shPct" data-id="${id}" type="range" min="0" max="100" step="5" value="${pct}">
+        <div class="chips">${[50,60,70,80].map(v => `<button type="button" class="chip ${v===pct?'on':''}" data-shp="${v}" data-id="${id}">${v} / ${100-v}</button>`).join('')}</div>`:''}
+      ${sh.with.length?`<div class="sum" style="margin-top:8px"><span>Tu parte (${CATS[e.cat]||'📦'} ${esc(e.cat)})</span><b>${money(e.amount)}</b></div>${lines}`
+        :'<div class="muted" style="margin-top:8px">Elige con quién lo compartes.</div>'}
+    </div>`;
+  }
+  const expById = id => expenses.find(x => String(x.id)===String(id));
+  function updShare(id, fn){ const e = expById(id); if(!e) return; fn(e); applyShare(e); persistE(); renderGastos(); }
   $('#revList').onclick = ev => {
     const ok = ev.target.closest('[data-ok]'), d = ev.target.closest('.del[data-id]');
-    if(ok){ const e = expenses.find(x => String(x.id)===ok.dataset.ok); if(e){ delete e.rev; persistE(); renderGastos(); } }
+    const w = ev.target.closest('[data-shw]'), m = ev.target.closest('[data-shm]'), pp = ev.target.closest('[data-shp]'), add = ev.target.closest('[data-shadd]');
+    if(w) return updShare(w.dataset.id, e => { const L = e.shared.with; e.shared.with = L.includes(w.dataset.shw) ? L.filter(x => x!==w.dataset.shw) : [...L, w.dataset.shw]; });
+    if(m) return updShare(m.dataset.id, e => { e.shared.mode = m.dataset.shm; if(e.shared.myPct==null) e.shared.myPct = 50; });
+    if(pp) return updShare(pp.dataset.id, e => e.shared.myPct = +pp.dataset.shp);
+    if(add){
+      const inp = document.querySelector(`.shNew[data-id="${add.dataset.shadd}"]`), name = inp && inp.value.trim();
+      if(!name){ if(inp) inp.focus(); return; }
+      const c = contacts.find(x => x.name.toLowerCase()===name.toLowerCase()) || addContact(name, '');
+      return updShare(add.dataset.shadd, e => { if(!e.shared.with.includes(c.id)) e.shared.with.push(c.id); });
+    }
+    if(ok){
+      const e = expById(ok.dataset.ok); if(!e) return;
+      if(e.shared && !e.shared.with.length){ alert('Elige con quién compartes este gasto, o desmarca “Gasto compartido”.'); return; }
+      delete e.rev; persistE(); renderGastos();
+    }
     else if(d && confirm('¿Eliminar este movimiento?')){ expenses = expenses.filter(e => String(e.id)!==d.dataset.id); persistE(); renderGastos(); }
   };
-  $('#revList').onchange = ev => {
-    const sel = ev.target.closest('.catsel'); if(!sel) return;
-    const e = expenses.find(x => String(x.id)===sel.dataset.id); if(e){ e.cat = sel.value; persistE(); }
+  $('#revList').oninput = ev => {
+    const pc = ev.target.closest('.shPct');
+    if(pc){ const e = expById(pc.dataset.id); if(e){ e.shared.myPct = +pc.value; applyShare(e); persistE(); } return; }
+    const w = ev.target.closest('.why'); if(!w) return;
+    const e = expById(w.dataset.id); if(e){ e.why = w.value.trim(); if(!e.why) delete e.why; persistE(); }
   };
-  $('#revAll').onclick = () => { expenses.forEach(e => { if(e.rev===false) delete e.rev; }); persistE(); renderGastos(); };
+  $('#revList').onchange = ev => {
+    if(ev.target.closest('.shPct')) return renderGastos();
+    const on = ev.target.closest('.shOn');
+    if(on) return updShare(on.dataset.id, e => { if(on.checked) e.shared = { with:[], mode:'equal', myPct:50 }; else delete e.shared; });
+    const sel = ev.target.closest('.catsel'); if(!sel) return;
+    const e = expById(sel.dataset.id); if(e){ e.cat = sel.value; persistE(); renderGastos(); }
+  };
+  $('#revAll').onclick = () => {
+    const sinGente = expenses.filter(e => e.rev===false && e.shared && !e.shared.with.length).length;
+    expenses.forEach(e => { if(e.rev===false && !(e.shared && !e.shared.with.length)) delete e.rev; }); persistE(); renderGastos();
+    if(sinGente) alert(`Quedan ${sinGente} gastos compartidos sin elegir con quién.`);
+  };
 
   function addExpense(o){
     expenses.push(Object.assign({ id: uid() }, o));
@@ -680,6 +808,16 @@ function calcPeriod(p, list){
     renderGastos();
   };
   $('#lista').onclick = ev => {
+    const co = ev.target.closest('[data-cobrar]'), pg = ev.target.closest('[data-pago]');
+    if(co){
+      const [eid, cid] = co.dataset.cobrar.split('|'), e = expById(eid), c = contacts.find(x => x.id===cid); if(!e || !c) return;
+      const text = shareMsg(e, c);
+      if(c.phone) window.open(`https://wa.me/${c.phone}?text=${encodeURIComponent(text)}`, '_blank');
+      else if(navigator.share) navigator.share({ text }).catch(()=>{});
+      else { try { navigator.clipboard.writeText(text); alert('Mensaje copiado. Agrega el teléfono de esta persona en Contactos para enviarlo por WhatsApp.'); } catch(err){} }
+      return;
+    }
+    if(pg){ const [eid, cid] = pg.dataset.pago.split('|'), e = expById(eid); if(e){ e.shared.paid[cid] = true; persistE(); renderGastos(); } return; }
     const b = ev.target.closest('.del'); if(!b) return;
     if(confirm('¿Eliminar este gasto?')){ expenses = expenses.filter(e => String(e.id)!==b.dataset.id); persistE(); renderGastos(); }
   };
@@ -689,7 +827,33 @@ function calcPeriod(p, list){
   };
 
   /* ---------- Importar Wallet ---------- */
+  function addBankRows(rows){
+    const keys = new Set(expenses.map(e => e.key).filter(Boolean));
+    let added = 0, last = null;
+    rows.forEach(r => {
+      if(keys.has(r.key)) return;
+      keys.add(r.key);
+      addExpense({ amount:r.amount, cat:autoCat(r.merchant), note:r.merchant, date:r.date, time:r.time, card:r.card, key:r.key, src:'correo', rev:false });
+      added++; if(!last || r.date>last) last = r.date;
+    });
+    if(last) viewYm = last.slice(0,7);
+    return added;
+  }
+  function askWhy(n){
+    renderGastos();
+    if(!n) return;
+    alert(n===1 ? 'Llegó 1 compra nueva con tarjeta. ¿A qué se debió? Cuéntame en “Por revisar”.'
+                : `Llegaron ${n} compras nuevas con tarjeta. ¿A qué se debió cada una? Cuéntame en “Por revisar”.`);
+    const first = document.querySelector('#revList .why[value=""]') || document.querySelector('#revList .why');
+    if(first){ first.scrollIntoView({block:'center'}); first.focus(); }
+  }
   function importText(txt){
+    const bank = parseBankMail(txt);
+    if(bank.length){
+      const n = addBankRows(bank);
+      if(!n){ renderGastos(); alert('Esas compras ya estaban importadas.'); } else askWhy(n);
+      return;
+    }
     const rows = parseLines(txt, today());
     if(!rows.length){ alert('No encontré movimientos válidos. Formato: 2026-10-09;12500;Comercio'); return; }
     const keys = new Set(expenses.map(e => e.key).filter(Boolean));
@@ -711,6 +875,41 @@ function calcPeriod(p, list){
     ev.target.value = '';
   };
   $('#impBtn').onclick = () => { importText($('#impText').value); $('#impText').value=''; };
+
+  /* ---------- Correos del banco (Google Apps Script) ---------- */
+  let correoUrl = load('correoUrl', ''), correoAt = load('correoAt', 0), syncing = false;
+  const renderCorreo = () => {
+    $('#correoUrl').value = correoUrl;
+    $('#correoInfo').textContent = !correoUrl ? 'Aún no conectas el script.'
+      : correoAt ? 'Última revisión: ' + new Date(correoAt).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'}) : 'Conectado, sin revisar todavía.';
+  };
+  async function syncCorreo(manual){
+    if(!correoUrl || syncing) return;
+    syncing = true; if(manual) $('#correoInfo').textContent = 'Revisando tu correo…';
+    try {
+      const u = new URL(correoUrl); u.searchParams.set('dias', correoAt ? '7' : '45');
+      const r = await fetch(u.toString(), { redirect:'follow' });
+      const d = await r.json();
+      if(d.error) throw new Error(d.error);
+      const rows = (d.correos||[]).flatMap(c => parseBankMail(c.texto));
+      correoAt = Date.now(); save('correoAt', correoAt);
+      const n = addBankRows(rows);
+      renderCorreo(); askWhy(n);
+      if(manual && !n) alert(rows.length ? 'No hay compras nuevas.' : 'No encontré avisos de compra en tu correo.');
+    } catch(e){
+      $('#correoInfo').textContent = 'No pude revisar el correo: ' + e.message;
+    } finally { syncing = false; }
+  }
+  $('#correoSave').onclick = () => {
+    const v = $('#correoUrl').value.trim();
+    if(v && !/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){ alert('La URL debe empezar con https://script.google.com/'); return; }
+    if(v && !/[?&]token=/.test(v)){ alert('Falta ?token=tu-clave al final de la URL.'); return; }
+    correoUrl = v; save('correoUrl', correoUrl); renderCorreo();
+    if(correoUrl) syncCorreo(true);
+  };
+  $('#correoSync').onclick = () => correoUrl ? syncCorreo(true) : alert('Primero pega y guarda la URL del script.');
+  const autoSync = () => { if(document.visibilityState==='visible' && Date.now()-correoAt > 5*60e3) syncCorreo(false); };
+  document.addEventListener('visibilitychange', autoSync);
 
   /* ================= CONTACTOS ================= */
   function addContact(name, phone){
@@ -1017,7 +1216,7 @@ function calcPeriod(p, list){
   function renderPeriodoCalc(){
     const p = perOf(); if(!p) return;
     const who = partnerOf(p), name = who ? who.name.split(' ')[0] : 'La otra persona';
-    const inRange = expenses.filter(e => e.date>=p.from && e.date<=p.to).sort((a,b)=>a.date.localeCompare(b.date));
+    const inRange = expenses.filter(e => e.date>=p.from && e.date<=p.to && !e.shared).sort((a,b)=>a.date.localeCompare(b.date));
     const r = calcPeriod(p, expenses);
     $('#pdPctMe').textContent = `Yo ${r.pct}%`; $('#pdPctThem').textContent = `${name} ${100-r.pct}%`;
     document.querySelectorAll('#pdPctPre .chip').forEach(b => b.classList.toggle('on', p.mode==='pct' && +b.dataset.p===r.pct));
@@ -1085,7 +1284,7 @@ function calcPeriod(p, list){
 
   /* ---------- Inicio ---------- */
   $('#gFecha').value = today();
-  renderChips(); renderGastos();
+  renderChips(); renderGastos(); renderCorreo(); autoSync();
 
   if('serviceWorker' in navigator){ window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{})); }
 })();

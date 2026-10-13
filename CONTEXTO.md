@@ -10,7 +10,7 @@ Idioma: español de Chile. Moneda: CLP, sin decimales. Teléfonos: si no traen c
 ## Archivos (todos en la misma carpeta, servidos por HTTPS)
 - `index.html`: toda la app (HTML, CSS y JS en un solo archivo, sin librerías ni servidor).
 - `manifest.json`: nombre "Mis Gastos", `display: standalone`, color #0f766e, íconos 192 y 512.
-- `sw.js`: service worker con caché (`gastos-v4`). Si se cambia algún archivo, subir el número de versión para que el iPhone actualice.
+- `sw.js`: service worker con caché (`gastos-v5`). Si se cambia algún archivo, subir el número de versión para que el iPhone actualice.
 - `icon-180.png`, `icon-192.png`, `icon-512.png`: íconos (recibo blanco sobre fondo verde).
 - `gastos-pwa.zip`: paquete de la versión inicial (v2), no incluye los cambios posteriores.
 - `pruebas/pure.test.js`: pruebas de las funciones puras. Correr con `node pruebas/pure.test.js`.
@@ -62,7 +62,21 @@ Una página web no puede leer Wallet ni el correo por sí sola. Solución sin se
 3. En la app: Importar, elegir `gastos.txt` (o pegar las líneas).
 - Formatos de línea aceptados: `2026-10-09;12500;Starbucks` o `12500;Starbucks`. Separadores `;`, `|` o tab. Fechas `yyyy-mm-dd` o `dd/mm/yyyy`. Montos `12.500`, `12.500,00` o `12500.50`.
 - Cada movimiento se categoriza por palabras clave del comercio (lista `RULES`) y se evita duplicar usando la clave `fecha|monto|comercio`.
-- No es en tiempo real y la app todavía no lee el correo.
+- No es en tiempo real.
+
+## Compras con tarjeta desde el correo (Banco de Chile)
+Formato del aviso (remitente `enviodigital@bancochile.cl`): "Te informamos que se ha realizado una compra por $1.000 con Tarjeta de Crédito ****1284 en EXPRESS VALDIVIA CTO el 11/10/2026 19:08."
+- Claude no tiene una casilla de correo propia, así que no se reenvían correos. En su lugar, un Google Apps Script en el Gmail de Alberto (`integraciones/correo-bancochile.gs`, publicado como aplicación web "ejecutar como yo", protegido con `?token=`) devuelve el texto de esos avisos de los últimos N días.
+- La app guarda la URL (`correoUrl`) y la consulta al abrirse o volver al frente (máximo cada 5 min) y con "Traer compras ahora". `parseBankMail` interpreta el texto (también HTML o reenviado con ">") y cada compra entra a "Por revisar" con `src:'correo'`, `time`, `card` y `key` `bch|fecha hora|monto|tarjeta` para no duplicar.
+- Por cada compra nueva la app avisa y pregunta "¿A qué se debió?"; la respuesta queda en `why` y se muestra en la lista.
+- Sin script: pegar el texto del correo en el cuadro de importar también funciona.
+
+## Cuestionario de "Por revisar" (Wallet y correo)
+Por cada movimiento importado la app pregunta: a qué se debió (`why`), de qué grupo es (categoría) y si es un **gasto compartido**. Si lo es: con quién (contactos, o se agrega un nombre nuevo), y el reparto: partes iguales o por porcentaje (mi %, con atajos 50/50, 60/40, 70/30, 80/20; con varias personas el resto se reparte en partes iguales).
+- Solo mi parte queda como gasto: `amount` pasa a ser mi parte y `total` guarda lo cobrado en la tarjeta. Así la torta, el total del mes y el % del sueldo cuentan solo lo mío. Ej: $50.000 en Ocio 50/50 → $25.000 en Ocio.
+- `shared: {with [ids de contactos], mode 'equal'|'pct', myPct, parts {id: monto}, paid {id: true}}`. `calcShare` y `applyShare` hacen el cálculo (en partes iguales, el peso que sobra lo absorbo yo).
+- En Movimientos se ve "Ana te debe $X" con botones Cobrar (WhatsApp con el detalle y los datos de transferencia) y Pagó.
+- No se puede confirmar un gasto compartido sin elegir con quién. Los gastos ya compartidos no entran a los Periodos, para no dividirlos dos veces. `findDupes` compara el total cobrado.
 
 ## Modelo de datos (localStorage, solo en el dispositivo)
 - `expenses`: `[{id, amount, cat, note, date 'YYYY-MM-DD', key?, src?}]`
@@ -71,29 +85,28 @@ Una página web no puede leer Wallet ni el correo por sí sola. Solución sin se
 - `sueldos`: `{ 'YYYY-MM': monto líquido }`
 - `split`: `{concept, mode 'equal'|'consumo'|'boleta', total, tip, sel [ids de contactos], amounts {id: monto}, paid {id: bool}, meName, items [{id, name, qty, unit, who [ids, 'me' soy yo]}], boletaTotal}`
 - `banco`: texto con los datos de transferencia.
+- `expenses[].why`: motivo del gasto; `time`, `card`: hora y últimos 4 dígitos (compras del correo).
+- `correoUrl`, `correoAt`: URL del script de Gmail y última revisión.
 - `periods`: `[{id, name, from, to, partner (id de contacto), mode 'equal'|'pct', myPct, excl [ids de gastos desmarcados], theirs [{id, amount, note, date}], settled}]`
 - `apiKey`: clave de API de Anthropic (opcional) para leer boletas automáticamente.
 Limitación importante: en iOS, Safari y la app instalada en la pantalla de inicio tienen almacenamiento separado, y si se desinstala la app se pierden los datos. No hay respaldo ni sincronización.
 
 ## Código: funciones puras (bloque `PURE-START`/`PURE-END` en el script)
-`autoCat`, `parseAmount`, `normDate`, `normPhone`, `calcSplit`, `parseLines`, `findDupes`, `sueldoFor`, `monthStats`, `calcBoleta`, `parseReceipt`, `buildReceiptRequest`, `receiptFromApi`, `calcPeriod`. Están probadas con pruebas automáticas en Node (montos chilenos, teléfonos, fechas, categorías, división igual y por consumo, importación de líneas).
+`autoCat`, `parseAmount`, `normDate`, `normPhone`, `calcSplit`, `parseLines`, `findDupes`, `sueldoFor`, `monthStats`, `calcBoleta`, `parseReceipt`, `buildReceiptRequest`, `receiptFromApi`, `parseBankMail`, `bankKey`, `calcPeriod`, `calcShare`, `applyShare`. Están probadas con pruebas automáticas en Node (montos chilenos, teléfonos, fechas, categorías, división igual y por consumo, importación de líneas).
 Bug corregido: con 85.000 + 10% entre 5 personas daba $18.701 por error de coma flotante; ahora da $18.700 (se calcula el total en enteros antes de dividir y se redondea hacia arriba).
 
 ## Decisiones y límites conocidos
 - Sin servidor ni cuentas: todo local. Es simple y privado, pero no hay respaldo.
-- Gmail: una página no puede leer el correo sin un backend. Existe un conector de Gmail para Claude (no está conectado todavía), con el que Claude podría leer avisos del banco en una conversación. No se ha leído ningún correo.
+- Gmail: una página no puede leer el correo sin un backend; por eso el Apps Script hace de backend mínimo dentro de la cuenta de Google de Alberto.
 - Los chats de claude.ai no se pueden mover a un proyecto si la cuenta no tiene proyectos creados; por eso este contexto se entrega como documento.
 
 ## Lo que no se puede (y por qué)
 - Leer notificaciones push: iOS no permite que ninguna app ni atajo lea las notificaciones de otras apps.
-- Correos del banco: posible con una automatización de Atajos ("Correo recibido") o con Gmail, pero falta un correo de ejemplo del banco para saber qué formato leer.
 
 ## Ideas pendientes (no hechas)
 - Exportar e importar respaldo en JSON (para no perder datos y para pasar de Safari a la app instalada).
 - Presupuesto mensual por categoría con alertas.
-- Importar avisos de correo del banco (falta ejemplo).
 - Sincronización con un backend (por ejemplo Google Sheets mediante Apps Script) para tener los gastos de Wallet en tiempo real.
-- Leer avisos del banco desde Gmail.
 - Gráficos mensuales y comparación entre meses.
 - Historial de cuentas divididas y saldo pendiente por persona.
 - Edición de un gasto (hoy solo se cambia la categoría o se elimina).
