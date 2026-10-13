@@ -10,7 +10,7 @@ Idioma: español de Chile. Moneda: CLP, sin decimales. Teléfonos: si no traen c
 ## Archivos (todos en la misma carpeta, servidos por HTTPS)
 - `index.html`: toda la app (HTML, CSS y JS en un solo archivo, sin librerías ni servidor).
 - `manifest.json`: nombre "Mis Gastos", `display: standalone`, color #0f766e, íconos 192 y 512.
-- `sw.js`: service worker con caché (`gastos-v4`). Si se cambia algún archivo, subir el número de versión para que el iPhone actualice.
+- `sw.js`: service worker con caché (`gastos-v5`). Si se cambia algún archivo, subir el número de versión para que el iPhone actualice.
 - `icon-180.png`, `icon-192.png`, `icon-512.png`: íconos (recibo blanco sobre fondo verde).
 - `gastos-pwa.zip`: paquete de la versión inicial (v2), no incluye los cambios posteriores.
 - `pruebas/pure.test.js`: pruebas de las funciones puras. Correr con `node pruebas/pure.test.js`.
@@ -71,6 +71,13 @@ Formato del aviso (remitente `enviodigital@bancochile.cl`): "Te informamos que s
 - Por cada compra nueva la app avisa y pregunta "¿A qué se debió?"; la respuesta queda en `why` y se muestra en la lista.
 - Sin script: pegar el texto del correo en el cuadro de importar también funciona.
 
+## Cuestionario de "Por revisar" (Wallet y correo)
+Por cada movimiento importado la app pregunta: a qué se debió (`why`), de qué grupo es (categoría) y si es un **gasto compartido**. Si lo es: con quién (contactos, o se agrega un nombre nuevo), y el reparto: partes iguales o por porcentaje (mi %, con atajos 50/50, 60/40, 70/30, 80/20; con varias personas el resto se reparte en partes iguales).
+- Solo mi parte queda como gasto: `amount` pasa a ser mi parte y `total` guarda lo cobrado en la tarjeta. Así la torta, el total del mes y el % del sueldo cuentan solo lo mío. Ej: $50.000 en Ocio 50/50 → $25.000 en Ocio.
+- `shared: {with [ids de contactos], mode 'equal'|'pct', myPct, parts {id: monto}, paid {id: true}}`. `calcShare` y `applyShare` hacen el cálculo (en partes iguales, el peso que sobra lo absorbo yo).
+- En Movimientos se ve "Ana te debe $X" con botones Cobrar (WhatsApp con el detalle y los datos de transferencia) y Pagó.
+- No se puede confirmar un gasto compartido sin elegir con quién. Los gastos ya compartidos no entran a los Periodos, para no dividirlos dos veces. `findDupes` compara el total cobrado.
+
 ## Modelo de datos (localStorage, solo en el dispositivo)
 - `expenses`: `[{id, amount, cat, note, date 'YYYY-MM-DD', key?, src?}]`
 - `contacts`: `[{id, name, phone (solo dígitos con código de país)}]`
@@ -85,7 +92,7 @@ Formato del aviso (remitente `enviodigital@bancochile.cl`): "Te informamos que s
 Limitación importante: en iOS, Safari y la app instalada en la pantalla de inicio tienen almacenamiento separado, y si se desinstala la app se pierden los datos. No hay respaldo ni sincronización.
 
 ## Código: funciones puras (bloque `PURE-START`/`PURE-END` en el script)
-`autoCat`, `parseAmount`, `normDate`, `normPhone`, `calcSplit`, `parseLines`, `findDupes`, `sueldoFor`, `monthStats`, `calcBoleta`, `parseReceipt`, `buildReceiptRequest`, `receiptFromApi`, `parseBankMail`, `bankKey`, `calcPeriod`. Están probadas con pruebas automáticas en Node (montos chilenos, teléfonos, fechas, categorías, división igual y por consumo, importación de líneas).
+`autoCat`, `parseAmount`, `normDate`, `normPhone`, `calcSplit`, `parseLines`, `findDupes`, `sueldoFor`, `monthStats`, `calcBoleta`, `parseReceipt`, `buildReceiptRequest`, `receiptFromApi`, `parseBankMail`, `bankKey`, `calcPeriod`, `calcShare`, `applyShare`. Están probadas con pruebas automáticas en Node (montos chilenos, teléfonos, fechas, categorías, división igual y por consumo, importación de líneas).
 Bug corregido: con 85.000 + 10% entre 5 personas daba $18.701 por error de coma flotante; ahora da $18.700 (se calcula el total en enteros antes de dividir y se redondea hacia arriba).
 
 ## Decisiones y límites conocidos
