@@ -1,4 +1,4 @@
-const CACHE = 'gastos-v5';
+const CACHE = 'gastos-v6';
 const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -13,5 +13,6 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).pathname.includes('/api/')) return;  // los datos del servidor nunca van a la caché
   e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request)));
 });
