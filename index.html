@@ -60,6 +60,22 @@ nav button.on{color:var(--accent)}
 .paid{color:var(--ok)}
 .monthnav{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .monthnav b{flex:1;text-align:center;text-transform:capitalize}
+.rango{display:flex;gap:8px;margin-top:8px}
+.rango>div{flex:1;min-width:0}
+.rango label{margin-top:0}
+.atajos{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.atajos button{width:auto;margin:0;padding:5px 10px;font-size:13px}
+#porCat .legend>div{display:block;padding:0}
+.legend .cat{cursor:pointer;border-radius:8px;margin:0 -4px;padding:2px 4px}
+.legend .cat:active,.legend .cat.on{background:var(--bg)}
+.legend .cat.on{outline:2px solid var(--accent)}
+.pie circle[data-cat]{cursor:pointer}
+.drill{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.drill .hd{display:flex;align-items:center;gap:8px}
+.drill .hd b{flex:1}
+.drill .merch{display:flex;justify-content:space-between;gap:8px;font-size:14px;padding:3px 0}
+.drill .merch span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drill .bar{height:4px;border-radius:2px;background:var(--accent);opacity:.5;margin-bottom:2px}
 details summary{font-weight:600;cursor:pointer;padding:2px 0}
 details ol{padding-left:20px;margin:10px 0}
 code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
@@ -96,15 +112,33 @@ input[type=range]{padding:0;border:0;background:none;accent-color:var(--accent)}
     <h1>Mis gastos</h1>
 
     <div class="card">
-      <div class="monthnav">
+      <div class="seg" id="vista" style="margin:0 0 10px">
+        <button type="button" data-v="mes" class="on">Por mes</button>
+        <button type="button" data-v="rango">Elegir fechas</button>
+      </div>
+      <div class="monthnav" id="mesNav">
         <button class="ghost small" id="mPrev" aria-label="Mes anterior">‹</button>
         <b id="mesTitulo">Este mes</b>
         <button class="ghost small" id="mNext" aria-label="Mes siguiente">›</button>
       </div>
+      <div id="rangoBox" class="hide" style="margin-bottom:8px">
+        <div class="rango">
+          <div><label>Desde</label><input id="rDesde" type="date"></div>
+          <div><label>Hasta</label><input id="rHasta" type="date"></div>
+        </div>
+        <div class="atajos" id="rAtajos">
+          <button type="button" class="ghost" data-a="7">Últimos 7 días</button>
+          <button type="button" class="ghost" data-a="30">Últimos 30 días</button>
+          <button type="button" class="ghost" data-a="90">3 meses</button>
+          <button type="button" class="ghost" data-a="anio">Este año</button>
+        </div>
+        <div class="muted" id="rangoTitulo" style="margin-top:8px"></div>
+      </div>
       <div class="big" id="totalMes">$0</div>
       <div class="muted" id="sueldoInfo"></div>
       <div id="porCat"></div>
-      <details style="margin-top:10px">
+      <div id="drill"></div>
+      <details style="margin-top:10px" id="sueldoBox">
         <summary class="muted">💼 Sueldo líquido de este mes</summary>
         <div class="row" style="align-items:center;margin-top:6px">
           <input id="sueldo" type="number" inputmode="numeric" placeholder="Ej: 1500000">
@@ -173,7 +207,7 @@ input[type=range]{padding:0;border:0;background:none;accent-color:var(--accent)}
     </div>
 
     <div class="card">
-      <h2>Movimientos</h2>
+      <h2>Movimientos <span class="muted" id="listaRango" style="font-weight:400;font-size:14px"></span></h2>
       <div id="lista"></div>
     </div>
   </section>
@@ -449,9 +483,41 @@ function sueldoFor(sueldos, ym){
   const ks = Object.keys(sueldos||{}).filter(k => k<=ym && sueldos[k]>0).sort();
   return ks.length ? sueldos[ks[ks.length-1]] : 0;
 }
+/* ---- Periodo que se muestra: mes en curso, o el anterior durante los primeros 7 días ---- */
+function defaultYm(day){
+  const [y,m,d] = String(day).split('-').map(Number);
+  if(d>7) return String(day).slice(0,7);
+  return m===1 ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
+}
+function monthRange(ym){
+  const [y,m] = ym.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: ym+'-01', to: `${ym}-${String(last).padStart(2,'0')}` };
+}
+function addDays(day, n){ const d = new Date(day+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+function inRange(e, from, to){ return !!e.date && e.date>=from && e.date<=to; }
 function monthStats(list, ym, sueldo){
+  const r = monthRange(ym);
+  return rangeStats(list, r.from, r.to, sueldo);
+}
+/* ---- Desglose de una categoría: compras y totales por comercio ---- */
+function catDetail(list, from, to, cat){
+  const items = list.filter(e => e.cat===cat && inRange(e, from, to))
+    .sort((a,b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
+  const total = items.reduce((a,e) => a+e.amount, 0);
+  const by = {};
+  items.forEach(e => {
+    const name = String(e.note||'').replace(/\s+/g,' ').trim() || 'Sin nota';
+    const k = name.toLowerCase();
+    if(!by[k]) by[k] = { name, amount:0, count:0 };
+    by[k].amount += e.amount; by[k].count++;
+  });
+  const merchants = Object.values(by).sort((a,b) => b.amount-a.amount || a.name.localeCompare(b.name));
+  return { cat, items, total, count: items.length, merchants };
+}
+function rangeStats(list, from, to, sueldo){
   const cats = {};
-  list.filter(e => e.date.startsWith(ym)).forEach(e => cats[e.cat] = (cats[e.cat]||0)+e.amount);
+  list.filter(e => inRange(e, from, to)).forEach(e => cats[e.cat] = (cats[e.cat]||0)+e.amount);
   const total = Object.values(cats).reduce((a,b)=>a+b,0);
   const base = sueldo>0 ? Math.max(sueldo,total) : total;
   const slices = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amount]) => ({ cat, amount, pct: base ? amount/base*100 : 0 }));
@@ -655,7 +721,10 @@ function calcPeriod(p, list){
   let sueldos = load('sueldos', {});
   let banco = load('banco', '');
   let selCat = 'Comida';
-  let viewYm = today().slice(0,7);
+  let viewYm = defaultYm(today());
+  let rangeMode = false, rFrom = '', rTo = '', drillCat = null;
+  const curRange = () => rangeMode ? { from:rFrom, to:rTo } : monthRange(viewYm);
+  function goMonth(ym){ viewYm = ym; rangeMode = false; drillCat = null; }
 
   const persistE = () => save('expenses', expenses);
   const persistC = () => save('contacts', contacts);
@@ -685,23 +754,81 @@ function calcPeriod(p, list){
   $('#catChips').onclick = ev => { const b = ev.target.closest('.chip'); if(!b) return; selCat = b.dataset.c; renderChips(); };
 
   function ymLabel(ym){ const [y,m] = ym.split('-').map(Number); return new Date(y, m-1, 1).toLocaleDateString('es-CL',{month:'long',year:'numeric'}); }
-  function shiftYm(d){ let [y,m] = viewYm.split('-').map(Number); m += d; if(m<1){m=12;y--} if(m>12){m=1;y++} viewYm = `${y}-${String(m).padStart(2,'0')}`; renderGastos(); }
+  function shiftYm(d){ let [y,m] = viewYm.split('-').map(Number); m += d; if(m<1){m=12;y--} if(m>12){m=1;y++} goMonth(`${y}-${String(m).padStart(2,'0')}`); renderGastos(); }
   $('#mPrev').onclick = () => shiftYm(-1);
   $('#mNext').onclick = () => shiftYm(1);
+  const fmtDay = d => { const [y,m,dd] = d.split('-').map(Number); return new Date(y, m-1, dd).toLocaleDateString('es-CL',{day:'numeric',month:'short',year:'numeric'}); };
+  function rangeLabel(){ const r = curRange(); return rangeMode ? `${fmtDay(r.from)} – ${fmtDay(r.to)}` : ymLabel(viewYm); }
+  function setRange(from, to){
+    if(from && to && from>to) [from, to] = [to, from];
+    rFrom = from; rTo = to; rangeMode = true; drillCat = null; renderGastos();
+  }
+  $('#vista').onclick = ev => {
+    const b = ev.target.closest('[data-v]'); if(!b) return;
+    if(b.dataset.v==='rango'){
+      const r = rFrom ? { from:rFrom, to:rTo } : monthRange(viewYm);
+      setRange(r.from, r.to);
+    } else { goMonth(rangeMode && rTo ? rTo.slice(0,7) : viewYm); renderGastos(); }
+  };
+  $('#rDesde').onchange = () => { if($('#rDesde').value) setRange($('#rDesde').value, rTo || $('#rDesde').value); };
+  $('#rHasta').onchange = () => { if($('#rHasta').value) setRange(rFrom || $('#rHasta').value, $('#rHasta').value); };
+  $('#rAtajos').onclick = ev => {
+    const b = ev.target.closest('[data-a]'); if(!b) return;
+    const t = today(), a = b.dataset.a;
+    if(a==='anio') setRange(t.slice(0,4)+'-01-01', t);
+    else setRange(addDays(t, -(Number(a)-1)), t);
+  };
+  function openDrill(cat){
+    drillCat = drillCat===cat ? null : cat;
+    renderGastos();
+    if(drillCat) $('#drill').scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+  $('#porCat').onclick = ev => { const el = ev.target.closest('[data-cat]'); if(el) openDrill(el.dataset.cat); };
+  $('#porCat').onkeydown = ev => { if(ev.key==='Enter' || ev.key===' '){ const el = ev.target.closest('[data-cat]'); if(el){ ev.preventDefault(); openDrill(el.dataset.cat); } } };
+  $('#drill').onclick = ev => { if(ev.target.closest('#drillClose')){ drillCat = null; renderGastos(); } };
+  function renderDrill(r){
+    if(!drillCat){ $('#drill').innerHTML = ''; return; }
+    const d = catDetail(expenses, r.from, r.to, drillCat);
+    if(!d.count){ drillCat = null; $('#drill').innerHTML = ''; return; }
+    const max = d.merchants[0].amount || 1;
+    const merch = d.merchants.length>1 ? `<div class="muted" style="margin:8px 0 4px">Por comercio</div>` + d.merchants.map(m =>
+      `<div class="merch"><span>${esc(m.name)}${m.count>1?` <span class="muted">×${m.count}</span>`:''}</span><b>${money(m.amount)}</b></div>
+       <div class="bar" style="width:${Math.max(3, m.amount/max*100).toFixed(1)}%;background:${COLORS[d.cat]||'var(--accent)'}"></div>`).join('') : '';
+    const items = d.items.map(e =>
+      `<div class="item"><div class="l"><b>${esc(e.note||e.cat)}</b>${e.why?`<span>${esc(e.why)}</span>`:''}
+         <span class="muted">${e.date.split('-').reverse().join('/')}${e.rev===false?' <span class="tag">por revisar</span>':''}${e.shared?` · 👥 de ${money(e.total)}`:''}</span></div>
+       <b>${money(e.amount)}</b></div>`).join('');
+    $('#drill').innerHTML = `<div class="drill">
+      <div class="hd"><b>${CATS[d.cat]||'📦'} ${esc(d.cat)} · ${money(d.total)}</b>
+        <button type="button" class="small ghost" id="drillClose" style="flex:0 0 auto;width:auto" aria-label="Cerrar desglose">✕</button></div>
+      <div class="muted">${d.count} ${d.count===1?'compra':'compras'} · ${esc(rangeLabel())}</div>
+      ${merch}
+      <div class="muted" style="margin:10px 0 2px">Compras</div>${items}</div>`;
+  }
 
   function renderGastos(){
+    const r = curRange();
     $('#mesTitulo').textContent = ymLabel(viewYm);
-    const mes = expenses.filter(e => e.date.startsWith(viewYm));
-    const sueldo = sueldoFor(sueldos, viewYm);
-    const st = monthStats(expenses, viewYm, sueldo);
+    [...$('#vista').children].forEach(b => b.classList.toggle('on', (b.dataset.v==='rango')===rangeMode));
+    $('#mesNav').classList.toggle('hide', rangeMode);
+    $('#rangoBox').classList.toggle('hide', !rangeMode);
+    $('#sueldoBox').classList.toggle('hide', rangeMode);
+    $('#rDesde').value = rFrom; $('#rHasta').value = rTo;
+    $('#rangoTitulo').textContent = rangeMode ? rangeLabel() : '';
+    $('#listaRango').textContent = '· ' + rangeLabel();
+    const mes = expenses.filter(e => inRange(e, r.from, r.to));
+    const sueldo = rangeMode ? 0 : sueldoFor(sueldos, viewYm);
+    const st = rangeStats(expenses, r.from, r.to, sueldo);
     $('#totalMes').textContent = money(st.total);
     $('#sueldo').value = sueldos[viewYm] || '';
     $('#sueldo').placeholder = sueldo ? String(sueldo) : 'Ej: 1500000';
     $('#sueldoInfo').innerHTML = sueldo
       ? (st.libre>=0 ? `${Math.round(st.pctSueldo)}% de tu sueldo de ${money(sueldo)} · te quedan <b>${money(st.libre)}</b>`
                      : `<span class="warn">Gastaste ${money(-st.libre)} más que tu sueldo de ${money(sueldo)}</span>`)
+      : rangeMode ? 'Los % son sobre el total gastado en estas fechas. Toca una categoría para ver sus compras.'
       : 'Ingresa tu sueldo abajo para ver qué parte se va en cada categoría.';
-    $('#porCat').innerHTML = st.slices.length ? pieHtml(st.slices, sueldo) : '<div class="muted" style="margin-top:10px">Sin gastos este mes.</div>';
+    $('#porCat').innerHTML = st.slices.length ? pieHtml(st.slices, sueldo) : `<div class="muted" style="margin-top:10px">Sin gastos ${rangeMode?'en estas fechas':'este mes'}.</div>`;
+    renderDrill(r);
     renderRevisar();
 
     const sorted = [...mes].sort((a,b)=> b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
@@ -736,12 +863,13 @@ function calcPeriod(p, list){
     const R = 15.9155, C = 100;                  // circunferencia = 100 para usar porcentajes directo
     let off = 0;
     const arcs = slices.map(x => {
-      const a = `<circle r="${R}" cx="21" cy="21" fill="none" stroke="${COLORS[x.cat]||'#94a3b8'}" stroke-width="7"
+      const a = `<circle ${x.cat!=='Disponible'?`data-cat="${esc(x.cat)}"`:''} r="${R}" cx="21" cy="21" fill="none" stroke="${COLORS[x.cat]||'#94a3b8'}" stroke-width="${x.cat===drillCat?9:7}"
         stroke-dasharray="${x.pct.toFixed(3)} ${(C-x.pct).toFixed(3)}" stroke-dashoffset="${(25-off).toFixed(3)}"></circle>`;
       off += x.pct; return a;
     }).join('');
-    const legend = slices.map(x => `<div><i style="background:${COLORS[x.cat]||'#94a3b8'}"></i><span>${x.cat==='Disponible'?'✅':(CATS[x.cat]||'📦')} ${esc(x.cat)}</span>
-      <b>${Math.round(x.pct)}%</b></div><div class="muted" style="padding:0 0 4px 16px">${money(x.amount)}</div>`).join('');
+    const legend = slices.map(x => { const dis = x.cat==='Disponible';
+      return `<div class="${dis?'':'cat'+(x.cat===drillCat?' on':'')}" ${dis?'':`data-cat="${esc(x.cat)}" role="button" tabindex="0" aria-label="Ver compras de ${esc(x.cat)}"`}><div><i style="background:${COLORS[x.cat]||'#94a3b8'}"></i><span>${dis?'✅':(CATS[x.cat]||'📦')} ${esc(x.cat)}</span>
+      <b>${Math.round(x.pct)}%</b>${dis?'':'<span class="muted" style="flex:0 0 auto">›</span>'}</div><div class="muted" style="padding:0 0 4px 16px">${money(x.amount)}</div></div>`; }).join('');
     return `<div class="pie"><svg viewBox="0 0 42 42" role="img" aria-label="Gastos por categoría">${arcs}
       <text x="21" y="20" text-anchor="middle" font-size="5" font-weight="700" fill="currentColor">${sueldo?Math.round(Math.min(100,slices.filter(x=>x.cat!=='Disponible').reduce((a,b)=>a+b.pct,0)))+'%':''}</text>
       <text x="21" y="26" text-anchor="middle" font-size="3.2" fill="currentColor" opacity=".6">${sueldo?'del sueldo':''}</text></svg>
@@ -844,7 +972,7 @@ function calcPeriod(p, list){
     const date = $('#gFecha').value || today();
     addExpense({ amount, cat:selCat, note:$('#gNota').value.trim(), date });
     $('#gMonto').value=''; $('#gNota').value='';
-    viewYm = date.slice(0,7);
+    goMonth(date.slice(0,7));
     renderGastos();
   };
   $('#lista').onclick = ev => {
@@ -876,7 +1004,7 @@ function calcPeriod(p, list){
       addExpense({ amount:r.amount, cat:autoCat(r.merchant), note:r.merchant, date:r.date, time:r.time, card:r.card, key:r.key, src:'correo', rev:false });
       added++; if(!last || r.date>last) last = r.date;
     });
-    if(last) viewYm = last.slice(0,7);
+    if(last) goMonth(last.slice(0,7));
     return added;
   }
   function askWhy(n){
@@ -905,7 +1033,7 @@ function calcPeriod(p, list){
       addExpense({ amount:r.amount, cat:autoCat(r.merchant), note:r.merchant, date:r.date, key, src:'wallet', rev:false });
       added++; last = r.date;
     });
-    if(last) viewYm = last.slice(0,7);
+    if(last) goMonth(last.slice(0,7));
     renderGastos();
     alert(`Importados: ${added}` + (dup?` · Repetidos omitidos: ${dup}`:''));
   }
@@ -1200,7 +1328,7 @@ function calcPeriod(p, list){
   $('#saveMine').onclick = () => {
     const r = calc(people()); if(!(r.parts[0]>0)) return;
     addExpense({ amount:r.parts[0], cat:'Comida', note:split.concept.trim() || 'Cuenta dividida (mi parte)', date:today() });
-    viewYm = today().slice(0,7); renderGastos(); alert('Guardado en Mis gastos');
+    goMonth(today().slice(0,7)); renderGastos(); alert('Guardado en Mis gastos');
   };
 
   $('#resetSplit').onclick = () => {

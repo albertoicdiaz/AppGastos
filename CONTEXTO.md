@@ -25,6 +25,9 @@ Opción homelab (Docker): `docker compose up -d --build` publica la app en el pu
 ## Estructura de la app (4 pestañas: Gastos, Dividir, Periodos, Contactos)
 ### 1. Gastos
 - Resumen del mes con total y gráfico de torta por categoría. Se puede cambiar de mes con ‹ ›.
+- Al abrir muestra el mes en curso, o el mes anterior si hoy es día 1 a 7 (`defaultYm`).
+- "Elegir fechas": rango desde/hasta con atajos (7 días, 30 días, 3 meses, este año). En rango no se usa el sueldo; los % son sobre lo gastado (`rangeStats`).
+- Desglose (drilldown): tocar una categoría en la torta o la leyenda muestra sus compras del periodo y el total por comercio (`catDetail`, agrupa por nota sin distinguir mayúsculas).
 - Sueldo líquido (de la liquidación) por mes: la torta muestra cada categoría como % del sueldo más un trozo "Disponible". Si un mes no tiene sueldo se usa el del último mes anterior que tenga. Sin sueldo, los % son sobre el total gastado.
 - Bandeja "Por revisar": lo importado de Wallet entra con `rev:false`; se confirma (✓), se corrige la categoría o se elimina. Avisa "¿Repetido?" si hay otro movimiento con el mismo monto a ±2 días.
 - Formulario: monto, categoría (chips con emoji), fecha, nota.
