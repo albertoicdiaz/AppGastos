@@ -4,7 +4,7 @@ const fs=require('fs'),path=require('path'),assert=require('assert');
 const file=process.argv[2]||path.join(__dirname,'..','index.html');
 const html=fs.readFileSync(file,'utf8');
 const code=html.split('/*PURE-START*/')[1].split('/*PURE-END*/')[0];
-const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES,findDupes,sueldoFor,monthStats,calcBoleta,parseReceipt,buildReceiptRequest,receiptFromApi,parseBankMail,bankKey,calcPeriod,calcShare,applyShare};')();
+const F=new Function(code+';return {autoCat,parseAmount,normDate,normPhone,calcSplit,parseLines,CATS,RULES,findDupes,sueldoFor,monthStats,calcBoleta,parseReceipt,buildReceiptRequest,receiptFromApi,parseBankMail,bankKey,calcPeriod,calcShare,applyShare,defaultYm,monthRange,addDays,catDetail,rangeStats};')();
 let ok=0,fail=0;const t=(n,f)=>{try{f();ok++}catch(e){fail++;console.log('FALLA',n,e.message)}};
 const eq=assert.deepStrictEqual;
 t('montos',()=>{eq(F.parseAmount('12.500'),12500);eq(F.parseAmount('12.500,00'),12500);eq(F.parseAmount('12500.50'),12501);eq(F.parseAmount('$ 1.234.567'),1234567);eq(F.parseAmount('abc'),0);eq(F.parseAmount(''),0);});
@@ -156,5 +156,23 @@ t('repetido compara el total cobrado',()=>{
 t('periodo no divide otra vez un gasto compartido',()=>{
   const a=F.applyShare({id:'a',amount:50000,date:'2026-10-02',shared:{with:['ana'],mode:'equal'}});
   eq(F.calcPeriod({from:'2026-10-01',to:'2026-10-05',mode:'equal'},[a,{id:'b',amount:1000,date:'2026-10-02'}]).paidMe,1000);
+});
+t('mes por defecto: primera semana muestra el mes anterior',()=>{
+  eq(F.defaultYm('2026-11-17'),'2026-11');eq(F.defaultYm('2026-11-08'),'2026-11');
+  eq(F.defaultYm('2026-11-07'),'2026-10');eq(F.defaultYm('2026-11-01'),'2026-10');eq(F.defaultYm('2027-01-03'),'2026-12');
+});
+t('rango de un mes',()=>{eq(F.monthRange('2026-02'),{from:'2026-02-01',to:'2026-02-28'});eq(F.monthRange('2028-02').to,'2028-02-29');eq(F.monthRange('2026-12').to,'2026-12-31');});
+t('sumar días',()=>{eq(F.addDays('2026-11-17',-29),'2026-10-19');eq(F.addDays('2026-01-01',-1),'2025-12-31');});
+const D=[{id:'1',amount:30000,cat:'Supermercado',note:'Lider',date:'2026-10-02'},{id:'2',amount:12000,cat:'Supermercado',note:'jumbo ',date:'2026-10-20'},
+  {id:'3',amount:8000,cat:'Supermercado',note:'LIDER',date:'2026-11-03'},{id:'4',amount:5000,cat:'Comida',note:'Sushi',date:'2026-10-05'},{id:'5',amount:9999,cat:'Supermercado',note:'Lider',date:'2026-09-30'}];
+t('estadística por rango de fechas',()=>{
+  const r=F.rangeStats(D,'2026-10-01','2026-11-05',0);eq(r.total,55000);eq(r.slices.map(s=>s.cat),['Supermercado','Comida']);
+  eq(F.monthStats(D,'2026-10',0).total,47000);
+});
+t('desglose de categoría con compras y comercios',()=>{
+  const d=F.catDetail(D,'2026-10-01','2026-11-30','Supermercado');
+  eq(d.count,3);eq(d.total,50000);eq(d.items.map(e=>e.id),['3','2','1']);
+  eq(d.merchants,[{name:'LIDER',amount:38000,count:2},{name:'jumbo',amount:12000,count:1}]);
+  eq(F.catDetail(D,'2026-10-01','2026-10-31','Ocio').count,0);
 });
 console.log(`${ok} pruebas OK, ${fail} fallas`);process.exit(fail?1:0);
