@@ -10,7 +10,7 @@ Idioma: español de Chile. Moneda: CLP, sin decimales. Teléfonos: si no traen c
 ## Archivos (todos en la misma carpeta, servidos por HTTPS)
 - `index.html`: toda la app (HTML, CSS y JS en un solo archivo, sin librerías ni servidor).
 - `manifest.json`: nombre "Mis Gastos", `display: standalone`, color #0f766e, íconos 192 y 512.
-- `sw.js`: service worker con caché (`gastos-v5`). Si se cambia algún archivo, subir el número de versión para que el iPhone actualice.
+- `sw.js`: service worker con caché (`gastos-v6`). Si se cambia algún archivo, subir el número de versión para que el iPhone actualice.
 - `icon-180.png`, `icon-192.png`, `icon-512.png`: íconos (recibo blanco sobre fondo verde).
 - `gastos-pwa.zip`: paquete de la versión inicial (v2), no incluye los cambios posteriores.
 - `pruebas/pure.test.js`: pruebas de las funciones puras. Correr con `node pruebas/pure.test.js`.
@@ -19,6 +19,8 @@ Repositorio: https://github.com/albertoicdiaz/AppGastos (privado).
 
 ## Cómo se publica
 Subir los archivos juntos a un hosting con HTTPS (GitHub Pages, Netlify o Vercel). En el iPhone: abrir la URL en Safari, Compartir, Añadir a pantalla de inicio.
+
+Opción homelab (Docker): `docker compose up -d --build` publica la app en el puerto 5001 con `server.js`, que además guarda los datos en el volumen `mis-gastos-datos` (`/data/datos.json`). Ver `LEEME-DOCKER.md`.
 
 ## Estructura de la app (4 pestañas: Gastos, Dividir, Periodos, Contactos)
 ### 1. Gastos
@@ -89,6 +91,7 @@ Por cada movimiento importado la app pregunta: a qué se debió (`why`), de qué
 - `correoUrl`, `correoAt`: URL del script de Gmail y última revisión.
 - `periods`: `[{id, name, from, to, partner (id de contacto), mode 'equal'|'pct', myPct, excl [ids de gastos desmarcados], theirs [{id, amount, note, date}], settled}]`
 - `apiKey`: clave de API de Anthropic (opcional) para leer boletas automáticamente.
+Con `server.js` (Docker), las claves `expenses`, `contacts`, `split`, `sueldos`, `banco` y `periods` se copian además a `/api/datos` (GET devuelve `{rev, data}`, PUT recibe solo las claves cambiadas, gana el último). `srvPend` guarda en el navegador las claves aún no subidas. `apiKey`, `correoUrl` y `correoAt` no se suben. En hosting estático `/api/datos` no existe y todo sigue solo local.
 Limitación importante: en iOS, Safari y la app instalada en la pantalla de inicio tienen almacenamiento separado, y si se desinstala la app se pierden los datos. No hay respaldo ni sincronización.
 
 ## Código: funciones puras (bloque `PURE-START`/`PURE-END` en el script)

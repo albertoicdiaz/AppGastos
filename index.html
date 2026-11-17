@@ -603,7 +603,47 @@ function calcPeriod(p, list){
   const money = n => CLP.format(Math.round(n||0));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const load = (k,d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch(e){ return d; } };
-  const save = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+  /* ---------- Sincronización con el servidor (solo si la app corre con server.js, p. ej. en Docker) ----------
+     Los datos siguen en localStorage, y además se copian a /api/datos para que queden en el volumen.
+     En un hosting estático (GitHub Pages, etc.) /api/datos no existe y la app funciona igual que antes. */
+  const SRV_KEYS = ['expenses','contacts','split','sueldos','banco','periods'];
+  const pend = new Set(load('srvPend', []));   // claves cambiadas aquí que falta subir
+  let srvOn = false, pushT = null;
+  const savePend = () => { try { localStorage.setItem('srvPend', JSON.stringify([...pend])); } catch(e){} };
+  const save = (k,v) => {
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){}
+    if(SRV_KEYS.includes(k)){ pend.add(k); savePend(); if(srvOn){ clearTimeout(pushT); pushT = setTimeout(pushSrv, 400); } }
+  };
+  async function pushSrv(){
+    if(!pend.size) return;
+    const keys = [...pend], body = {};
+    keys.forEach(k => body[k] = load(k, null));
+    try {
+      const r = await fetch('api/datos', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      if(!r.ok) return;
+      keys.forEach(k => { if(JSON.stringify(body[k]) === localStorage.getItem(k)) pend.delete(k); });
+      savePend();
+      if(pend.size){ clearTimeout(pushT); pushT = setTimeout(pushSrv, 400); }
+    } catch(e){ /* sin conexión: se reintenta en el próximo cambio o al volver a la app */ }
+  }
+  async function pullSrv(){
+    let j;
+    try { const r = await fetch('api/datos', { cache:'no-store' }); if(!r.ok) return; j = await r.json(); } catch(e){ return; }
+    if(!j || typeof j.data !== 'object' || !j.data) return;
+    srvOn = true;
+    let changed = false;
+    SRV_KEYS.forEach(k => {
+      if(pend.has(k)) return;                       // lo cambiado aquí sin subir gana
+      if(!(k in j.data)){ if(localStorage.getItem(k) !== null) pend.add(k); return; }  // primera vez: subir lo local
+      const s = JSON.stringify(j.data[k]);
+      if(s !== localStorage.getItem(k)){ try { localStorage.setItem(k, s); changed = true; } catch(e){} }
+    });
+    savePend();
+    if(pend.size) await pushSrv();
+    if(changed) location.reload();                 // otro dispositivo cambió algo: recargar con lo del servidor
+  }
+  pullSrv();
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') pullSrv(); });
   const today = () => { const d = new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
   const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 

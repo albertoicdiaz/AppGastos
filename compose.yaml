@@ -1,0 +1,18 @@
+name: mis-gastos
+
+services:
+  gastos:
+    build: .
+    image: mis-gastos:latest
+    container_name: mis-gastos
+    restart: unless-stopped
+    ports:
+      - "5001:8080"
+    volumes:
+      - gastos-datos:/data
+    environment:
+      - TZ=America/Santiago
+
+volumes:
+  gastos-datos:
+    name: mis-gastos-datos
